@@ -1,0 +1,648 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Cooper Dashboard</title>
+        <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+        <style>
+            * {
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+            }
+
+            body {
+                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+                min-height: 100vh;
+                padding: 20px;
+                color: #eee;
+            }
+
+            .container {
+                max-width: 1400px;
+                margin: 0 auto;
+            }
+
+            h1 {
+                text-align: center;
+                margin-bottom: 30px;
+                font-size: 2.5em;
+                color: #00d4ff;
+                text-shadow: 0 0 10px rgba(0,212,255,0.3);
+            }
+
+            .cards {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+                gap: 20px;
+                margin-bottom: 30px;
+            }
+
+            .card {
+                background: rgba(255,255,255,0.1);
+                backdrop-filter: blur(10px);
+                border-radius: 15px;
+                padding: 20px;
+                text-align: center;
+                border: 1px solid rgba(255,255,255,0.2);
+                transition: transform 0.3s;
+            }
+
+            .card:hover {
+                transform: translateY(-5px);
+            }
+
+            .card h3 {
+                font-size: 0.9em;
+                opacity: 0.8;
+                margin-bottom: 10px;
+            }
+
+            .card .value {
+                font-size: 2.5em;
+                font-weight: bold;
+                color: #00d4ff;
+            }
+
+            .card .label {
+                font-size: 0.8em;
+                margin-top: 10px;
+                opacity: 0.7;
+            }
+
+            .card.positive .value { color: #00ff88; }
+            .card.negative .value { color: #ff4444; }
+
+            .vendas-container {
+                background: rgba(255,255,255,0.05);
+                border-radius: 15px;
+                padding: 20px;
+                margin-top: 20px;
+            }
+
+            .vendas-cards {
+                display: flex;
+                flex-direction: column;
+                gap: 10px;
+                margin-top: 15px;
+            }
+
+            .venda-card {
+                background: rgba(255,255,255,0.08);
+                border-radius: 10px;
+                padding: 12px 15px;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                transition: all 0.3s;
+                border-left: 3px solid #00d4ff;
+            }
+
+            .venda-card:hover {
+                background: rgba(255,255,255,0.12);
+                transform: translateX(5px);
+            }
+
+            .venda-info {
+                display: flex;
+                gap: 20px;
+                align-items: baseline;
+                flex-wrap: wrap;
+            }
+
+            .venda-codigo {
+                background: #00d4ff20;
+                padding: 4px 10px;
+                border-radius: 20px;
+                font-family: monospace;
+                font-size: 0.9em;
+                color: #00d4ff;
+            }
+
+            .venda-produto {
+                font-weight: bold;
+            }
+
+            .venda-qtd {
+                color: #ffaa00;
+            }
+
+            .venda-total {
+                font-weight: bold;
+                color: #00ff88;
+            }
+
+            .venda-data {
+                font-size: 0.8em;
+                opacity: 0.6;
+                font-family: monospace;
+            }
+
+            .loading {
+                text-align: center;
+                padding: 20px;
+                opacity: 0.6;
+            }
+
+            @media (max-width: 768px) {
+                .venda-card {
+                    flex-direction: column;
+                    align-items: flex-start;
+                    gap: 8px;
+                }
+                .venda-info {
+                    gap: 10px;
+                }
+            }
+
+            .grid-2 {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+                gap: 20px;
+                margin-bottom: 30px;
+            }
+
+            .chart-container {
+                background: rgba(255,255,255,0.05);
+                border-radius: 15px;
+                padding: 20px;
+                border: 1px solid rgba(255,255,255,0.1);
+            }
+
+            .chart-container h3 {
+                margin-bottom: 15px;
+                color: #00d4ff;
+            }
+
+            .produtos-table {
+                background: rgba(255,255,255,0.05);
+                border-radius: 15px;
+                padding: 20px;
+                overflow-x: auto;
+            }
+
+            table {
+                width: 100%;
+                border-collapse: collapse;
+            }
+
+            th, td {
+                padding: 12px;
+                text-align: left;
+                border-bottom: 1px solid rgba(255,255,255,0.1);
+            }
+
+            th {
+                color: #00d4ff;
+                font-weight: bold;
+            }
+
+            .status-baixo {
+                color: #ff4444;
+                font-weight: bold;
+            }
+
+            .status-normal {
+                color: #00ff88;
+            }
+
+            footer {
+                text-align: center;
+                margin-top: 30px;
+                padding: 20px;
+                opacity: 0.5;
+                font-size: 0.8em;
+            }
+
+            .chat-container {
+                background: rgba(255,255,255,0.05);
+                border-radius: 15px;
+                padding: 20px;
+                margin-top: 20px;
+            }
+
+            .chat-messages {
+                height: 400px;
+                overflow-y: auto;
+                margin-bottom: 15px;
+                padding: 10px;
+                background: rgba(0,0,0,0.3);
+                border-radius: 10px;
+            }
+
+            .chat-message {
+                margin-bottom: 15px;
+                padding: 10px;
+                border-radius: 10px;
+                display: flex;
+                flex-wrap: wrap;
+            }
+
+            .chat-message.usuario {
+                background: #00d4ff20;
+                border-left: 3px solid #00d4ff;
+            }
+
+            .chat-message.cooper {
+                background: rgba(255,255,255,0.1);
+                border-left: 3px solid #00ff88;
+            }
+
+            .chat-name {
+                font-weight: bold;
+                margin-right: 10px;
+            }
+
+            .chat-text {
+                word-break: break-word;
+                flex: 1;
+            }
+
+            .chat-input-area {
+                display: flex;
+                gap: 10px;
+            }
+
+            .chat-input-area input {
+                flex: 1;
+                padding: 12px;
+                border: none;
+                border-radius: 25px;
+                background: rgba(255,255,255,0.1);
+                color: white;
+                outline: none;
+            }
+
+            .chat-input-area button {
+                padding: 12px 24px;
+                border: none;
+                border-radius: 25px;
+                background: #00d4ff;
+                color: #1a1a2e;
+                font-weight: bold;
+                cursor: pointer;
+                transition: all 0.3s;
+            }
+
+            .chat-input-area button:hover {
+                background: #00ff88;
+                transform: scale(1.02);
+            }
+
+            @media (max-width: 768px) {
+                .grid-2 {
+                    grid-template-columns: 1fr;
+                }
+                .cards {
+                    grid-template-columns: repeat(2, 1fr);
+                }
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1>🤖 Cooper Dashboard</h1>
+
+            <div class="cards">
+                <div class="card">
+                    <h3>💰 Total em Compras</h3>
+                    <div class="value" id="total-compras">R$ 0</div>
+                    <div class="label">Investimento total</div>
+                </div>
+                <div class="card">
+                    <h3>💵 Total em Vendas</h3>
+                    <div class="value" id="total-vendas">R$ 0</div>
+                    <div class="label">Faturamento total</div>
+                </div>
+                <div class="card" id="lucro-card">
+                    <h3>📈 Lucro Total</h3>
+                    <div class="value" id="lucro">R$ 0</div>
+                    <div class="label">Resultado final</div>
+                </div>
+                <div class="card">
+                    <h3>📦 Produtos</h3>
+                    <div class="value" id="qtd-produtos">0</div>
+                    <div class="label">Produtos cadastrados</div>
+                </div>
+            </div>
+
+            <!-- Últimas Vendas -->
+            <div class="vendas-container">
+                <h3>🧾 Últimas Vendas</h3>
+                <div class="vendas-cards" id="ultimas-vendas">
+                    <div class="loading">Carregando...</div>
+                </div>
+            </div>
+
+            <div class="grid-2">
+                <div class="chart-container">
+                    <h3>📊 Estoque por Produto</h3>
+                    <div id="estoque-chart" style="height: 400px;"></div>
+                </div>
+                <div class="produtos-table">
+                    <h3>🛒 Produtos em Estoque</h3>
+                    <table id="produtos-table">
+                        <thead>
+                            <tr><th>Código</th><th>Produto</th><th>Qtd</th><th>Preço</th></tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Chat com Cooper -->
+            <div class="chat-container">
+                <h3>💬 Falar com Cooper</h3>
+                <div class="chat-messages" id="chat-messages">
+                    <div class="chat-message cooper">
+                        <span class="chat-name">Cooper:</span>
+                        <span class="chat-text">Olá! Como posso ajudar?</span>
+                    </div>
+                </div>
+                <div class="chat-input-area">
+                    <input type="text" id="chat-input" placeholder="Digite sua mensagem..." onkeypress="if(event.key==='Enter') enviarMensagem()">
+                    <button onclick="enviarMensagem()">📤 Enviar</button>
+                </div>
+            </div>
+
+            <footer>
+                Cooper v1.0 | Gerente de Loja Inteligente
+            </footer>
+        </div>
+
+        <script>
+
+            function carregarUltimasVendas() {
+            
+                fetch('/api/ultimas_vendas')
+                    .then(res => res.json())
+                    .then(data => {
+                    
+                        const container = document.getElementById('ultimas-vendas');
+                    
+                        if (data.length === 0) {
+                            container.innerHTML =
+                                '<div class="loading">📭 Nenhuma venda registrada</div>';
+                            return;
+                        }
+                    
+                        let html = '';
+                    
+                        data.forEach(v => {
+                        
+                            const horario = v.data
+                                ? v.data.split('T')[1]?.substring(0,5)
+                                : '--:--';
+                        
+                            html += `
+                                <div class="venda-card">
+                                
+                                    <div class="venda-info">
+                                    
+                                        <span class="venda-codigo">
+                                            #${v.codigo}
+                                        </span>
+                                    
+                                        <span class="venda-produto">
+                                            ${v.produto}
+                                        </span>
+                                    
+                                        <span class="venda-qtd">
+                                            ${v.quantidade} un
+                                        </span>
+                                    
+                                        <span class="venda-total">
+                                            R$ ${Number(v.total).toFixed(2)}
+                                        </span>
+                                    
+                                    </div>
+                                
+                                    <div class="venda-data">
+                                        ${horario}
+                                    </div>
+                                
+                                </div>
+                            `;
+                        });
+                    
+                        container.innerHTML = html;
+                    });
+            }
+
+            function atualizarResumo() {
+            
+                fetch('/api/resumo')
+                    .then(res => res.json())
+                    .then(data => {
+                    
+                        document.getElementById('total-compras').innerText =
+                            `R$ ${data.total_compras.toFixed(2)}`;
+                    
+                        document.getElementById('total-vendas').innerText =
+                            `R$ ${data.total_vendas.toFixed(2)}`;
+                    
+                        document.getElementById('lucro').innerText =
+                            `R$ ${data.lucro.toFixed(2)}`;
+                    
+                        document.getElementById('qtd-produtos').innerText =
+                            data.qtd_produtos;
+                    
+                        const lucroCard =
+                            document.getElementById('lucro-card');
+                    
+                        if (data.lucro >= 0) {
+                        
+                            lucroCard.classList.add('positive');
+                            lucroCard.classList.remove('negative');
+                        
+                        } else {
+                        
+                            lucroCard.classList.add('negative');
+                            lucroCard.classList.remove('positive');
+                        }
+                    });
+            }
+
+            function atualizarProdutos() {
+            
+                fetch('/api/produtos')
+                    .then(res => res.json())
+                    .then(data => {
+                    
+                        // =========================
+                        // TABELA
+                        // =========================
+                    
+                        const tbody =
+                            document.querySelector('#produtos-table tbody');
+                    
+                        tbody.innerHTML = '';
+                    
+                        data.forEach(p => {
+                        
+                            const row = tbody.insertRow();
+                        
+                            row.insertCell(0).innerText = p.codigo;
+                            row.insertCell(1).innerText = p.nome;
+                        
+                            const qtdCell = row.insertCell(2);
+                        
+                            qtdCell.innerText = p.estoque;
+                        
+                            qtdCell.className =
+                                p.estoque < 5
+                                ? 'status-baixo'
+                                : 'status-normal';
+                        
+                            row.insertCell(3).innerText =
+                                `R$ ${(p.preco_venda || 0).toFixed(2)}`;
+                        });
+                    
+                        // =========================
+                        // GRÁFICO
+                        // =========================
+                    
+                        const codigos =
+                            data.map(p => p.codigo);
+                    
+                        const nomes =
+                            data.map(p => p.nome);
+                    
+                        const quantidades =
+                            data.map(p => p.estoque);
+                    
+                        const trace = {
+                        
+                            x: codigos,
+                        
+                            y: quantidades,
+                        
+                            type: 'bar',
+                        
+                            text:
+                                quantidades.map(q => `${q} un`),
+                        
+                            textposition: 'outside',
+                        
+                            hovertemplate:
+                                '<b>%{customdata}</b><br>' +
+                                'Código: %{x}<br>' +
+                                'Quantidade: %{y}<extra></extra>',
+                        
+                            customdata: nomes,
+                        
+                            marker: {
+                                color: quantidades,
+                                colorscale: 'Viridis'
+                            }
+                        };
+                    
+                        const layout = {
+                        
+                            title: 'Estoque por Produto',
+                        
+                            template: 'plotly_dark',
+                        
+                            height: 400,
+                        
+                            paper_bgcolor: 'rgba(0,0,0,0)',
+                        
+                            plot_bgcolor: 'rgba(0,0,0,0)',
+                        
+                            margin: {
+                                l: 50,
+                                r: 20,
+                                t: 50,
+                                b: 50
+                            },
+                        
+                            xaxis: {
+                                title: 'Código'
+                            },
+                        
+                            yaxis: {
+                                title: 'Quantidade',
+                                dtick: 1
+                            }
+                        };
+                    
+                        Plotly.newPlot(
+                            'estoque-chart',
+                            [trace],
+                            layout,
+                            {responsive: true}
+                        );
+                    });
+            }
+
+            function atualizarDashboard() {
+            
+                atualizarResumo();
+            
+                atualizarProdutos();
+            
+                carregarUltimasVendas();
+            }
+
+            // inicia
+            atualizarDashboard();
+
+            // atualiza sozinho
+            setInterval(atualizarDashboard, 30000);
+
+            function enviarMensagem() {
+                const input = document.getElementById('chat-input');
+                const mensagem = input.value.trim();
+    
+                if (!mensagem) return;
+    
+                // Adiciona mensagem do usuário no chat
+                const messagesDiv = document.getElementById('chat-messages');
+                const userMsg = document.createElement('div');
+                userMsg.className = 'chat-message usuario';
+                userMsg.innerHTML = `<span class="chat-name">Você:</span><span class="chat-text">${mensagem}</span>`;
+                messagesDiv.appendChild(userMsg);
+    
+            // Limpa input
+            input.value = '';
+
+            // Adiciona "digitando..."
+            const typingMsg = document.createElement('div');
+            typingMsg.className = 'chat-message cooper';
+            typingMsg.id = 'typing';
+            typingMsg.innerHTML = `<span class="chat-name">Cooper:</span><span class="chat-text">🤔 Digitando...</span>`;
+            messagesDiv.appendChild(typingMsg);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+
+            // Envia para o Cooper
+            fetch('/api/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ mensagem: mensagem })
+            })
+            .then(res => res.json())
+            .then(data => {
+                // Remove "digitando..."
+                document.getElementById('typing')?.remove();
+
+                // Adiciona resposta do Cooper
+                const cooperMsg = document.createElement('div');
+                cooperMsg.className = 'chat-message cooper';
+                cooperMsg.innerHTML = `<span class="chat-name">Cooper:</span><span class="chat-text">${data.resposta}</span>`;
+                messagesDiv.appendChild(cooperMsg);
+                messagesDiv.scrollTop = messagesDiv.scrollHeight;
+            })
+            .catch(error => {
+                document.getElementById('typing')?.remove();
+                const errorMsg = document.createElement('div');
+                errorMsg.className = 'chat-message cooper';
+                errorMsg.innerHTML = `<span class="chat-name">Cooper:</span><span class="chat-text">❌ Erro ao processar mensagem</span>`;
+                messagesDiv.appendChild(errorMsg);
+            });
+        }
+
+        </script>
+    </body>
+</html>
