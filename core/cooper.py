@@ -9,6 +9,8 @@ from core.tasks import TaskManager
 from core.event_bus import EventBus
 from core.logger import CooperLogger
 from datetime import datetime
+from core.actions.action_bus import ActionBus
+from core.actions.system_actions import status_cooper
 
 class Cooper:
     def __init__(self):
@@ -17,6 +19,8 @@ class Cooper:
         self.event_bus = EventBus()
         self.tasks = TaskManager()
         self.contexto = Contexto()
+        self.actions = ActionBus()
+        self.actions.registrar("status", status_cooper)
         
         # Registra ouvintes de eventos
         self.event_bus.registrar("venda_realizada", self._on_venda)
@@ -114,6 +118,9 @@ class Cooper:
     
     def processar(self, msg):
         msg_lower = msg.lower().strip()
+
+        if msg_lower == "status":
+            return self.actions.executar("status")
         
         # Saudação (prioridade máxima)
         if msg_lower in ["oi", "ola", "olá", "bom dia", "boa tarde", "boa noite"]:
@@ -168,5 +175,8 @@ class Cooper:
                 self._verificar_rotina()
             
             return resposta
+        
+        if msg_lower == "status":
+            return self.actions.executar("status")
         
         return "Erro: agente não encontrado"

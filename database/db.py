@@ -188,3 +188,29 @@ class Database:
         conn.commit()
         conn.close()
         return True
+    
+    def atualizar_nome_por_codigo(self, codigo, novo_nome):
+        conn = sqlite3.connect(self.db_file)
+        cursor = conn.cursor()
+
+        cursor.execute(
+            'UPDATE produtos SET nome = ? WHERE codigo = ?',
+            (novo_nome, codigo)
+        )
+
+        conn.commit()
+        conn.close()
+        return True
+    
+    def atualizar_preco_por_codigo(self, codigo, preco):
+        conn = sqlite3.connect(self.db_file)
+        cursor = conn.cursor()
+    
+        cursor.execute(
+            'UPDATE produtos SET preco_venda = ? WHERE codigo = ?',
+            (preco, codigo)
+        )
+    
+        conn.commit()
+        conn.close()
+        return True

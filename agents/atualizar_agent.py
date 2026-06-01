@@ -1,12 +1,7 @@
 # agents/atualizar_agent.py
 from agents.base_agent import BaseAgent
 import re
-from repositories.produto_repository import (
-    buscar_produto,
-    atualizar_nome,
-    atualizar_preco,
-    atualizar_estoque,
-)
+from database.db import Database 
 
 class AtualizarAgent(BaseAgent):
     def __init__(self):
@@ -27,7 +22,8 @@ class AtualizarAgent(BaseAgent):
         if not codigo:
             return "⚠️ Diga o código do produto. Ex: atualizar produto 720 preco_venda 29.90"
         
-        produto = buscar_produto(codigo)
+        db = Database()
+        produto = db.buscar_produto_por_codigo(codigo)
         if not produto:
             return f"⚠️ Produto com código {codigo} não encontrado. Cadastre primeiro com: comprei X produto codigo {codigo} por Y reais"
         
@@ -39,7 +35,8 @@ class AtualizarAgent(BaseAgent):
                 novo_nome = nome_match.group(1).strip()
                 if len(novo_nome) < 2:
                     return "⚠️ Nome muito curto. Use um nome descritivo."
-                atualizar_nome(codigo, novo_nome)       
+                db = Database()
+                db.atualizar_nome_por_codigo(codigo, novo_nome)
                 return f"✅ Produto {codigo} agora se chama: {novo_nome}"
             return "Use: atualizar produto 720 nome calcinha renda preta"
         
@@ -52,7 +49,8 @@ class AtualizarAgent(BaseAgent):
                 if preco <= 0:
                     return "⚠️ Preço inválido. Use um valor maior que zero."
                 
-                atualizar_preco(codigo, preco)
+                db = Database()
+                db.atualizar_preco_por_codigo(codigo, preco)
                 return f"✅ Produto {codigo} agora custa R$ {preco:.2f}"
             return "Use: atualizar produto 720 preco_venda 29.90"
         
@@ -66,7 +64,8 @@ class AtualizarAgent(BaseAgent):
                 if estoque < 0:
                     return "⚠️ Estoque não pode ser negativo. Use um valor maior ou igual a zero."
                 
-                atualizar_estoque(codigo, estoque)
+                db = Database()
+                db.atualizar_estoque_por_codigo(codigo, estoque)
                 return f"✅ Produto {codigo} agora tem {estoque} unidades"
             return "Use: atualizar produto 720 estoque 100"
         
