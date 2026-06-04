@@ -9,8 +9,17 @@ class Contexto:
     def __init__(self):
         self.intent_classifier = IntentClassifier()
         self.entity_extractor = EntityExtractor()
+
         self.historico = []
-        self.ultimo_produto = None
+
+        self.contexto = {
+            "eventos": [],
+            "estado_atual": {
+                "ultimo_produto": {"codigo": None},
+                "ultima_intencao": None
+            }
+        }
+
         self.arquivo_contexto = "contexto.json"
         self._carregar_contexto()
     
@@ -19,48 +28,59 @@ class Contexto:
             with open(self.arquivo_contexto, 'r') as f:
                 dados = json.load(f)
                 self.historico = dados.get("historico", [])
-                self.ultimo_produto = dados.get("ultimo_produto", None)
-    
+                self.contexto = dados.get("contexto", self.contexto)
+
     def _salvar_contexto(self):
         with open(self.arquivo_contexto, 'w') as f:
             json.dump({
                 "historico": self.historico[-50:],
-                "ultimo_produto": self.ultimo_produto
+                "contexto": self.contexto
             }, f, indent=2)
     
     def analisar(self, mensagem):
         """Analisa mensagem e retorna intenção + entidades"""
 
         intencao = self.intent_classifier.classificar(mensagem)
+
+        continuidade = ["mais", "repete", "repetir", "mesmo", "continua", "continuação"]
+
         entidades = self.entity_extractor.extrair_tudo(mensagem)
 
-        # Referências ao último produto
-        if intencao in ["compra", "venda"]:
+        produto = entidades.get("produto", "")
 
-            produto = entidades.get("produto", "")
+        # resolução de continuidade (NOVA LÓGICA)
 
-            if produto in [
-                "produto",
-                "esse",
-                "essa",
-                "este",
-                "esta",
-                "isso",
-                "mais"
-            ]:
-                if self.ultimo_produto:
-                    entidades["produto"] = self.ultimo_produto
-                    entidades["referencia"] = True
+        tokens = mensagem.lower().split()
 
-        # Memoriza último produto citado
+        if any(palavra in tokens for palavra in continuidade):
+            ultimo = self.contexto["estado_atual"]["ultimo_produto"]["codigo"]
+
+            if ultimo:
+                entidades["produto"] = ultimo
+                entidades["referencia"] = True
+
+        # 🛡️ atualização de estado com validação anti-bug
         if entidades.get("produto"):
-            self.ultimo_produto = entidades["produto"]
-            self._salvar_contexto()
+            produto_valor = entidades["produto"]
+
+            # impede número curto virar produto (ex: "1", "2", "178")
+            if isinstance(produto_valor, str) and produto_valor.isdigit() and len(produto_valor) <= 3:
+                pass
+            else:
+                self.contexto["estado_atual"]["ultimo_produto"] = {
+                    "codigo": produto_valor
+                }
+
+        # 🧠 atualiza intenção
+        self.contexto["estado_atual"]["ultima_intencao"] = intencao
+        
+        self._salvar_contexto()
 
         return {
             "intencao": intencao,
             "entidades": entidades
         }
+    
     
     def registrar(self, mensagem, resposta, analise):
         self.historico.append({
@@ -69,9 +89,14 @@ class Contexto:
             "resposta": resposta,
             "intencao": analise["intencao"]
         })
-        
-        if analise["entidades"].get("produto"):
-            self.ultimo_produto = analise["entidades"]["produto"]
+
+        if analise["intencao"] in ["compra", "venda"]:
+            self.contexto["eventos"].append({
+                "tipo": analise["intencao"],
+                "produto": analise["entidades"].get("produto"),
+                "quantidade": analise["entidades"].get("quantidade"),
+                "timestamp": datetime.now().isoformat()
+            })
         
         self._salvar_contexto()
     
@@ -80,5 +105,5 @@ class Contexto:
         return {
             "intencao": analise["intencao"],
             "entidades": analise["entidades"],
-            "ultimo_produto": self.ultimo_produto
+            "ultimo_produto": self.contexto["estado_atual"]["ultimo_produto"]["codigo"]
         }
