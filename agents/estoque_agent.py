@@ -11,7 +11,7 @@ class EstoqueAgent(BaseAgent):
         """Só processa comandos relacionados a consulta de estoque"""
         return "estoque" in msg.lower()
     
-    def processar(self, msg: str) -> str:
+    def processar(self, msg: str, analise=None) -> str:
         """Retorna a lista de produtos em estoque"""
         conn = sqlite3.connect(self.db_file)
         cursor = conn.cursor()

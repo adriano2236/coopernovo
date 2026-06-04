@@ -57,26 +57,40 @@ class Router:
 
         # NLP
         analise = self.contexto.analisar(msg_lower)
+
+        print(f"[NLP] {analise}")
+
         intencao = analise["intencao"]
+
+        if (
+            intencao == "desconhecido"
+            and analise["entidades"].get("referencia")
+        ):
+            intencao = self.contexto.contexto["estado_atual"]["ultima_intencao"]
+
+            print(f"[INTENCAO_FINAL] {intencao}")
 
         # Agentes
         if intencao in self.agentes:
-            resposta = self.agentes[intencao].processar(msg)
-        
+
+            print(f"[ROUTER] Agente selecionado: {intencao}")
+
+            resposta = self.agentes[intencao].processar(
+                msg,
+                analise
+            )
+
             self.contexto.registrar(
                 msg,
                 resposta,
                 analise
-            )
-        
+        )
+
             return {
                 "agente": intencao,
                 "resposta": resposta,
                 "analise": analise
             }
-
-        # Fallback
-        return self._fallback(msg_lower)
 
     # -------------------------
     # FALLBACK

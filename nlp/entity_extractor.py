@@ -82,6 +82,9 @@ class EntityExtractor:
                         break
                      
                     produto.append(p)
+
+                    if produto and produto[0] in ["de", "do", "da"]:
+                        return "produto"
         
                 if produto:
                     return " ".join(produto)

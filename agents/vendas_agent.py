@@ -13,36 +13,17 @@ class VendasAgent(BaseAgent):
     def pode_processar(self, msg):
         return any(p in msg.lower() for p in ["vende", "vendi", "vender"])
     
-    def processar(self, msg):
+    def processar(self, msg, analise=None):
         msg_lower = msg.lower()
-        
-        # ========== EXTRAÇÃO ==========
-        # Extrai quantidade
-        qtd = 1
-        
-        qtd_match = re.search(
-            r'(vendi|vende|venda|vender)\s+(\d+)',
-            msg_lower
-)
-        
-        if qtd_match:
-            qtd = int(qtd_match.group(2))
-        
-        # Extrai código
-        codigo = None
-        patterns = [
-            r'\bdo\s*(\d+)',
-            r'\bda\s*(\d+)',
-            r'\bde\s*(\d+)',
-            r'\bcodigo\s*(\d+)',
-            r'\bcódigo\s*(\d+)',
-            r'#(\d+)'
-        ]
-        for pattern in patterns:
-            match = re.search(pattern, msg_lower)
-            if match:
-                codigo = match.group(1)
-                break
+
+        if analise:
+            codigo = analise["entidades"].get("codigo")
+            qtd = analise["entidades"].get("quantidade", 1)
+        else:
+            codigo = None
+            qtd = 1
+
+        print(f"[VENDAS_AGENT] MSG: {msg}")
         
         # ========== VALIDAÇÕES ==========
         # VALIDAÇÃO 1: Quantidade deve ser positiva

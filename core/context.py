@@ -15,7 +15,10 @@ class Contexto:
         self.contexto = {
             "eventos": [],
             "estado_atual": {
-                "ultimo_produto": {"codigo": None},
+                "ultimo_produto": {
+                    "codigo": None,
+                    "nome": None
+                },
                 "ultima_intencao": None
             }
         }
@@ -54,25 +57,25 @@ class Contexto:
 
         if any(palavra in tokens for palavra in continuidade):
             ultimo = self.contexto["estado_atual"]["ultimo_produto"]["codigo"]
-
+            nome = self.contexto["estado_atual"]["ultimo_produto"]["nome"]
+        
             if ultimo:
-                entidades["produto"] = ultimo
+                entidades["codigo"] = ultimo
+                entidades["produto"] = nome
                 entidades["referencia"] = True
 
         # 🛡️ atualização de estado com validação anti-bug
-        if entidades.get("produto"):
-            produto_valor = entidades["produto"]
+        codigo = entidades.get("codigo")
 
-            # impede número curto virar produto (ex: "1", "2", "178")
-            if isinstance(produto_valor, str) and produto_valor.isdigit() and len(produto_valor) <= 3:
-                pass
-            else:
-                self.contexto["estado_atual"]["ultimo_produto"] = {
-                    "codigo": produto_valor
-                }
+        if codigo:
+            self.contexto["estado_atual"]["ultimo_produto"] = {
+                "codigo": codigo,
+                "nome": entidades.get("produto")
+            }
 
         # 🧠 atualiza intenção
-        self.contexto["estado_atual"]["ultima_intencao"] = intencao
+        if intencao != "desconhecido":
+            self.contexto["estado_atual"]["ultima_intencao"] = intencao
         
         self._salvar_contexto()
 

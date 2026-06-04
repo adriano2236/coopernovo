@@ -13,33 +13,19 @@ class ComprasAgent(BaseAgent):
     def pode_processar(self, msg):
         return "comprei" in msg.lower()
     
-    def processar(self, msg):
+    def processar(self, msg, analise=None):
         msg_lower = msg.lower()
-        
-        # ========== EXTRAÇÃO ==========
-        # Extrai quantidade
-        qtd_match = re.search(r'(\d+)', msg)
-        qtd = int(qtd_match.group(1)) if qtd_match else 0
-        
-        # Extrai preço
-        preco_match = re.search(r'por\s*(\d+(?:[.,]\d+)?)', msg)
-        preco = float(preco_match.group(1).replace(",", ".")) if preco_match else 0
-        
-        # Extrai código
-        codigo_match = re.search(r'codigo\s*(\d+)', msg_lower)
-        codigo = codigo_match.group(1) if codigo_match else None
-        
-        # Extrai nome do produto
-        produto = "produto"
-        
-        if codigo:
-            match = re.search(
-                rf'comprei\s+\d+\s+(.+?)\s+codigo\s+{codigo}',
-                msg_lower
-            )
-        
-            if match:
-                produto = match.group(1).strip()
+
+        if analise:
+            codigo = analise["entidades"].get("codigo")
+            qtd = analise["entidades"].get("quantidade", 0)
+            preco = analise["entidades"].get("preco", 0)
+            produto = analise["entidades"].get("produto", "produto")
+        else:
+            codigo = None
+            qtd = 0
+            preco = 0
+            produto = "produto"
         
         # ========== VALIDAÇÕES ==========
         # VALIDAÇÃO 1: Quantidade deve ser positiva
