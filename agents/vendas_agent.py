@@ -21,9 +21,9 @@ class VendasAgent(BaseAgent):
         qtd = 1
         
         qtd_match = re.search(
-            r'(vendi|vende|vender)\s+(\d+)',
+            r'(vendi|vende|venda|vender)\s+(\d+)',
             msg_lower
-        )
+)
         
         if qtd_match:
             qtd = int(qtd_match.group(2))
@@ -31,8 +31,12 @@ class VendasAgent(BaseAgent):
         # Extrai código
         codigo = None
         patterns = [
-            r'do\s*(\d+)', r'da\s*(\d+)', r'codigo\s*(\d+)',
-            r'código\s*(\d+)', r'#(\d+)', r'\b(\d{3})\b'
+            r'\bdo\s*(\d+)',
+            r'\bda\s*(\d+)',
+            r'\bde\s*(\d+)',
+            r'\bcodigo\s*(\d+)',
+            r'\bcódigo\s*(\d+)',
+            r'#(\d+)'
         ]
         for pattern in patterns:
             match = re.search(pattern, msg_lower)

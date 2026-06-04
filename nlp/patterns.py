@@ -3,13 +3,92 @@
 class Patterns:
     # Intenções e suas palavras-chave
     INTENTS = {
-        "compra": ["comprei", "comprar", "adquiri", "adicionei"],
-        "venda": ["vendi", "vender", "vendido", "vendeu"],
-        "estoque": ["estoque", "quantos", "tem", "sobra", "resta", "saldo"],
-        "resumo": ["lucro", "resumo", "total", "faturamento", "balanço"],
-        "saudacao": ["oi", "ola", "bom dia", "boa tarde", "boa noite", "eai"],
-        "despedida": ["tchau", "sair", "fim", "ate logo", "encerrar", "parar"],
-        "tarefas": ["tarefas", "pendentes", "o que preciso fazer", "lista", "to do", "tarefa"],
+
+        "compra": [
+            "comprei",
+            "compra",
+            "compre",
+            "comprar",
+            "adquiri",
+            "adicionei",
+            "entrada",
+            "entrada de estoque",
+            "entrou",
+            "recebi"
+        ],
+
+        "venda": [
+            "vendi",
+            "vende",
+            "venda",
+            "vender",
+            "vendido",
+            "vendeu",
+            "saida",
+            "saída",
+            "saiu"
+        ],
+
+        "estoque": [
+            "estoque",
+            "quantos",
+            "tem",
+            "sobra",
+            "resta",
+            "saldo",
+            "produto",
+            "produtos",
+            "disponivel",
+            "disponível"
+        ],
+
+        "resumo": [
+            "lucro",
+            "resumo",
+            "total",
+            "faturamento",
+            "balanco",
+            "balanço",
+            "caixa",
+            "financeiro"
+        ],
+
+        "atualizar": [
+            "atualizar",
+            "alterar",
+            "corrigir",
+            "editar",
+            "mudar"
+        ],
+
+        "saudacao": [
+            "oi",
+            "ola",
+            "olá",
+            "bom dia",
+            "boa tarde",
+            "boa noite",
+            "eai"
+        ],
+
+        "despedida": [
+            "tchau",
+            "sair",
+            "fim",
+            "ate logo",
+            "até logo",
+            "encerrar",
+            "parar"
+        ],
+
+        "tarefas": [
+            "tarefas",
+            "pendentes",
+            "o que preciso fazer",
+            "lista",
+            "to do",
+            "tarefa"
+        ]
     }
     
     # Padrões para extração de entidades (regex)

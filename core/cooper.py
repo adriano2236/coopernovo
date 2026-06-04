@@ -42,7 +42,18 @@ class Cooper:
         self.logger.info("Cooper inicializado")
 
     def processar(self, msg):
-        return self.router.processar(msg)
+        resultado = self.router.processar(msg)
+
+        if isinstance(resultado, dict):
+
+            agente = resultado["agente"]
+            resposta = resultado["resposta"]
+
+            self.logger.info(f"Agente usado: {agente}")
+
+            return resposta
+
+        return resultado
 
     def _on_venda(self, evento, dados):
         self.logger.acao(

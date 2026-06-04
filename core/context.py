@@ -30,16 +30,33 @@ class Contexto:
     
     def analisar(self, mensagem):
         """Analisa mensagem e retorna intenção + entidades"""
+
         intencao = self.intent_classifier.classificar(mensagem)
         entidades = self.entity_extractor.extrair_tudo(mensagem)
-        
-        # Se for referência a "esse" ou "mais", usa último produto
+
+        # Referências ao último produto
         if intencao in ["compra", "venda"]:
-            if entidades["produto"] == "produto" or entidades["produto"] in ["esse", "este", "isso"]:
+
+            produto = entidades.get("produto", "")
+
+            if produto in [
+                "produto",
+                "esse",
+                "essa",
+                "este",
+                "esta",
+                "isso",
+                "mais"
+            ]:
                 if self.ultimo_produto:
                     entidades["produto"] = self.ultimo_produto
                     entidades["referencia"] = True
-        
+
+        # Memoriza último produto citado
+        if entidades.get("produto"):
+            self.ultimo_produto = entidades["produto"]
+            self._salvar_contexto()
+
         return {
             "intencao": intencao,
             "entidades": entidades

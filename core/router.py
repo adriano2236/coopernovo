@@ -62,14 +62,18 @@ class Router:
         # Agentes
         if intencao in self.agentes:
             resposta = self.agentes[intencao].processar(msg)
-
+        
             self.contexto.registrar(
                 msg,
                 resposta,
                 analise
             )
-
-            return resposta
+        
+            return {
+                "agente": intencao,
+                "resposta": resposta,
+                "analise": analise
+            }
 
         # Fallback
         return self._fallback(msg_lower)
@@ -78,7 +82,30 @@ class Router:
     # FALLBACK
     # -------------------------
     def _fallback(self, msg):
+        msg = msg.lower()
+    
+        if any(p in msg for p in ["vendi", "vende", "venda"]):
+            return (
+                "Entendi que você quer registrar uma venda. "
+                "Exemplo: vendi 2 calcinha codigo 720 por 25 reais"
+            )
+    
+        if any(p in msg for p in ["comprei", "compra", "comprar"]):
+            return (
+                "Entendi que você quer registrar uma compra. "
+                "Exemplo: comprei 5 calcinha codigo 720 por 10 reais"
+            )
+    
+        if any(p in msg for p in ["estoque", "produto", "codigo"]):
+            return (
+                "Você pode consultar o estoque dizendo: estoque"
+            )
+    
         return (
-            "Não entendi. "
-            "Tente: compra, venda, estoque, resumo ou atualizar."
+            "Não entendi o comando.\n"
+            "Exemplos:\n"
+            "- comprei 5 calcinha codigo 720 por 10 reais\n"
+            "- vendi 2 calcinha codigo 720 por 25 reais\n"
+            "- estoque\n"
+            "- resumo"
         )

@@ -45,6 +45,9 @@ class EntityExtractor:
             r'sku[:]?\s*(\d+)',
             r'#(\d+)',
             r'produto\s*(\d+)',
+            r'de\s*(\d+)',
+            r'do\s*(\d+)',
+            r'da\s*(\d+)',
         ]
         
         for pattern in patterns:
@@ -57,24 +60,31 @@ class EntityExtractor:
     def extrair_produto(self, mensagem):
         msg = mensagem.lower()
         
-        # Tenta extrair pelo padrão
-        for pattern in self.patterns.ENTITY_PATTERNS["produto"]:
-            match = re.search(pattern, msg)
-            if match:
-                for grupo in match.groups():
-                    if grupo and not grupo.isdigit():
-                        return self.patterns.singular(grupo)
-        
-        # Fallback: palavra após quantidade
         palavras = msg.split()
-        for i, p in enumerate(palavras):
-            if p.isdigit() or p in ["uma", "um"]:
-                if i + 1 < len(palavras):
-                    produto = palavras[i + 1]
-                    # Remove "por" se vier depois
-                    if produto == "por" and i + 2 < len(palavras):
-                        produto = palavras[i + 2]
-                    return self.patterns.singular(produto)
+        
+        ignorar = {
+            "comprei", "comprar", "vendi", "vender",
+            "por", "reais", "real", "codigo", "código"
+        }
+        
+        for i, palavra in enumerate(palavras):
+           
+            if palavra.isdigit() or palavra in ["um", "uma"]:
+               
+                produto = []
+        
+                for p in palavras[i + 1:]:
+                   
+                    if p in ignorar:
+                        break
+                     
+                    if p.replace(".", "").replace(",", "").isdigit():
+                        break
+                     
+                    produto.append(p)
+        
+                if produto:
+                    return " ".join(produto)
         
         return "produto"
     

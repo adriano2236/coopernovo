@@ -6,7 +6,7 @@ class IntentClassifier:
         self.patterns = Patterns()
     
     def classificar(self, mensagem):
-        msg_lower = mensagem.lower()
+        msg_lower = mensagem.lower().strip()
         
         pontuacoes = {}
         

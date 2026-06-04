@@ -30,15 +30,16 @@ class ComprasAgent(BaseAgent):
         codigo = codigo_match.group(1) if codigo_match else None
         
         # Extrai nome do produto
-        produto = ""
-        if qtd and codigo:
-            padrao = rf'{qtd}\s*(.+?)\s*codigo\s*{codigo}'
-            match = re.search(padrao, msg_lower)
+        produto = "produto"
+        
+        if codigo:
+            match = re.search(
+                rf'comprei\s+\d+\s+(.+?)\s+codigo\s+{codigo}',
+                msg_lower
+            )
+        
             if match:
                 produto = match.group(1).strip()
-        
-        if not produto:
-            produto = "produto"
         
         # ========== VALIDAÇÕES ==========
         # VALIDAÇÃO 1: Quantidade deve ser positiva
