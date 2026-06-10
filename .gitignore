@@ -1,9 +1,0 @@
-﻿__pycache__/
-*.pyc
-logs/
-
-# Banco de dados
-*.db
-
-# Contexto gerado automaticamente
-contexto.json

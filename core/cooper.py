@@ -1,82 +1,130 @@
-# core/cooper.py
+"""
+Núcleo principal do Cooper.
 
-from core.context import Contexto
-from core.tasks import TaskManager
-from core.event_bus import EventBus
-from core.logger import CooperLogger
+Este módulo define a classe Cooper, responsável por orquestrar o fluxo central
+da aplicação. O Cooper recebe uma mensagem, solicita uma análise opcional ao
+interpretador NLP, envia a mensagem ao Router e utiliza o ResponseBuilder para
+produzir a resposta final.
 
-from core.actions.action_bus import ActionBus
-from core.actions.system_actions import status_cooper
+Regra arquitetural principal:
+    Cooper = orquestração
 
+O núcleo não deve concentrar regras específicas de vendas, compras ou estoque.
+Essas responsabilidades pertencem aos agentes especializados.
+"""
+
+from typing import Any
+from agents.base_agent import BaseAgent
+from core.response_builder import ResponseBuilder
 from core.router import Router
 
 
 class Cooper:
-    def __init__(self):
-        self.logger = CooperLogger()
-        self.event_bus = EventBus()
-        self.tasks = TaskManager()
-        self.contexto = Contexto()
+    """
+    Orquestrador principal do sistema Cooper.
 
-        self.actions = ActionBus()
+    Esta classe conecta as camadas centrais do projeto sem assumir a lógica de
+    negócio de cada domínio. Ela mantém o fluxo previsível e facilita a adição
+    de novos agentes no futuro.
+    """
 
-        # Ações do sistema
-        self.actions.registrar("status", status_cooper)
-        self.actions.registrar("backup", self._backup)
-        self.actions.registrar("produtos", self._produtos)
-        self.actions.registrar("estoque_baixo", self._estoque_baixo_action)
+    def __init__(
+        self,
+        router: Router,
+        response_builder: ResponseBuilder | None = None,
+        interpretador: Any | None = None,
+    ) -> None:
+        """
+        Inicializa o Cooper com suas dependências principais.
 
-        # Eventos
-        self.event_bus.registrar("venda_realizada", self._on_venda)
-        self.event_bus.registrar("compra_realizada", self._on_compra)
-        self.event_bus.registrar("estoque_baixo", self._on_estoque_baixo)
+        Args:
+            router: Roteador responsável por selecionar o agente apropriado.
+            response_builder: Construtor de respostas finais. Quando não for
+                informado, uma instância padrão será criada.
+            interpretador: Camada opcional de NLP para análise prévia da
+                mensagem.
+        """
+        if not isinstance(router, Router):
+            raise TypeError("router deve ser uma instância de Router.")
 
-        # Router passa a controlar agentes e decisões
-        self.router = Router(
-            actions=self.actions,
-            contexto=self.contexto,
-            tasks=self.tasks,
-            event_bus=self.event_bus
+        self.router = router
+        self.response_builder = response_builder or ResponseBuilder()
+        self.interpretador = interpretador
+
+    def responder(self, msg: str) -> str:
+        """
+        Processa uma mensagem e retorna a resposta final ao usuário.
+
+        Args:
+            msg: Mensagem original enviada ao Cooper.
+
+        Returns:
+            Texto final construído pelo ResponseBuilder.
+        """
+        resultado = self.processar(msg)
+
+        if not isinstance(resultado, dict):
+            return "Erro interno do Cooper."
+        
+        return self.response_builder.construir(resultado)
+
+    def processar(self, msg: str) -> dict[str, Any]:
+        """
+        Executa o fluxo interno completo sem formatar a resposta final.
+
+        Este método é útil para testes, depuração e interfaces que desejam
+        receber os dados internos padronizados em vez de texto pronto.
+
+        Args:
+            msg: Mensagem original enviada ao Cooper.
+
+        Returns:
+            Dicionário padronizado retornado pelo Router ou pelo agente.
+        """
+        analise = self._analisar(msg)
+        return self.router.rotear(msg, analise=analise)
+
+    def _analisar(self, msg: str) -> dict[str, Any] | None:
+        """
+        Executa a análise NLP quando um interpretador estiver configurado.
+
+        Args:
+            msg: Mensagem original enviada ao Cooper.
+
+        Returns:
+            Dicionário de análise NLP ou None quando não houver interpretador.
+        """
+        if self.interpretador is None:
+            return None
+
+        if hasattr(self.interpretador, "interpretar"):
+            return self.interpretador.interpretar(msg)
+
+        if callable(self.interpretador):
+            return self.interpretador(msg)
+
+        raise TypeError(
+            "interpretador deve ser callable ou possuir um método interpretar(msg)."
         )
 
-        self.logger.info("Cooper inicializado")
+    def registrar_agent(self, agent: BaseAgent) -> None:
+        """
+        Registra um agente no Router interno.
 
-    def processar(self, msg):
-        resultado = self.router.processar(msg)
+        Args:
+            agent: Agente especializado que herda de BaseAgent.
+        """
+        self.router.registrar(agent)
 
-        if isinstance(resultado, dict):
+    def listar_agents(self) -> list[str]:
+        """
+        Lista os agentes disponíveis no Router interno.
 
-            agente = resultado["agente"]
-            resposta = resultado["resposta"]
+        Returns:
+            Lista de nomes dos agentes registrados.
+        """
+        return self.router.listar_agents()
 
-            self.logger.info(f"Agente usado: {agente}")
-
-            return resposta
-
-        return resultado
-
-    def _on_venda(self, evento, dados):
-        self.logger.acao(
-            "VENDA",
-            f"{dados['quantidade']} {dados['produto']} por R$ {dados['preco']}"
-        )
-
-    def _on_compra(self, evento, dados):
-        self.logger.acao(
-            "COMPRA",
-            f"{dados['quantidade']} {dados['produto']} por R$ {dados['preco']}"
-        )
-
-    def _on_estoque_baixo(self, evento, dados):
-        self.logger.warning(
-            f"⚠️ Estoque baixo: {dados['produto']} ({dados['estoque']} un)"
-        )
-
-    def _backup(self):
-        return "Backup executado (placeholder)"
-
-    def _produtos(self):
-        return "Lista de produtos (placeholder)"
-
-    def _estoque_baixo_action(self):
-        return "Estoque baixo acionado (placeholder)"
+    def __repr__(self) -> str:
+        """Retorna uma representação simples do Cooper para depuração."""
+        return f"Cooper(agents={self.listar_agents()!r})"
