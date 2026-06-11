@@ -1,16 +1,13 @@
 """
 Interpretador NLP do Cooper.
 
-Este módulo define o Interpretador, responsável por realizar uma análise inicial
-da mensagem antes que ela seja encaminhada ao Router. A implementação é simples,
-previsível e baseada em regras, servindo como base estável para evoluções
-futuras.
+Responsabilidade desta camada:
+    - normalizar texto
+    - sugerir dominio
+    - sugerir intencao
+    - extrair entidades
 
-Regra arquitetural principal:
-    Interpretador = análise sem decisão final
-
-O interpretador pode sugerir domínio e intenção, mas não escolhe o agente final
-e não formata a resposta ao usuário.
+Ela nao escolhe agente, nao executa regra de negocio e nao formata resposta.
 """
 
 import re
@@ -19,76 +16,106 @@ from typing import Any
 
 
 class Interpretador:
-    """
-    Interpreta mensagens recebidas pelo Cooper.
+    """Interpreta mensagens recebidas pelo Cooper."""
 
-    Esta classe aplica regras leves de normalização e identificação inicial de
-    domínio, intenção e entidades. O objetivo é enriquecer o processamento sem
-    substituir a responsabilidade do Router ou dos agentes especializados.
-    """
-
-    DOMINIOS = {
-        "vendas": {
-            "venda",
-            "vendas",
-            "vende",
-            "vendi",
-            "vender",
-            "pedido",
-            "cliente",
-            "orcamento",
-            "faturamento",
-        },
-            "compras": {
-            "compra",
-            "compras",
-            "comprar",
-            "comprei",
-            "compramos",
-            "fornecedor",
-            "cotacao",
-            "cotar",
-            "reposicao",
-        },
-        "estoque": {
-            "estoque",
-            "produto",
-            "produtos",
-            "saldo",
-            "inventario",
-            "entrada",
-            "saida",
-            "camiseta",
-            "camisa",
-            "calca",
-            "bermuda",
-            "vestido",
-            "blusa",
-            "jaqueta",
-            "short",
-            "saia",
-            "tenis",
-        },
+    VERBOS_VENDA = {
+        "venda",
+        "vende",
+        "vender",
+        "vendi",
+        "vendemos",
+        "vendeu",
+        "vendido",
     }
 
-    CORES = {
-        "amarelo",
-        "amarela",
-        "azul",
-        "bege",
-        "branco",
-        "branca",
-        "cinza",
-        "laranja",
-        "marrom",
-        "preto",
-        "preta",
-        "rosa",
-        "roxo",
-        "roxa",
-        "verde",
-        "vermelho",
-        "vermelha",
+    VERBOS_ENTRADA_ESTOQUE = {
+        "adiciona",
+        "adicione",
+        "chegou",
+        "chegaram",
+        "coloca",
+        "coloque",
+        "coloquei",
+        "entrada",
+        "entrou",
+        "recebi",
+        "recebemos",
+    }
+
+    VERBOS_SAIDA_ESTOQUE = {
+        "baixa",
+        "baixar",
+        "retira",
+        "retire",
+        "retirei",
+        "saida",
+        "saiu",
+        "tira",
+        "tirar",
+        "tirei",
+    }
+
+    TERMOS_CONSULTA_ESTOQUE = {
+        "consultar",
+        "consulta",
+        "estoque",
+        "quantas",
+        "quantidade",
+        "quanto",
+        "saldo",
+        "tem",
+        "tenho",
+    }
+
+    TERMOS_INVENTARIO = {"inventario", "relatorio"}
+
+    TERMOS_COMPRAS = {
+        "compra",
+        "compras",
+        "comprar",
+        "comprei",
+        "compramos",
+        "cotacao",
+        "cotar",
+        "fornecedor",
+        "reposicao",
+    }
+
+    CORES_MAP = {
+        "amarela": "amarela",
+        "amarelas": "amarela",
+        "amarelo": "amarela",
+        "amarelos": "amarela",
+        "azul": "azul",
+        "azuis": "azul",
+        "bege": "bege",
+        "beiges": "bege",
+        "branca": "branca",
+        "brancas": "branca",
+        "branco": "branca",
+        "brancos": "branca",
+        "cinza": "cinza",
+        "cinzas": "cinza",
+        "laranja": "laranja",
+        "laranjas": "laranja",
+        "marrom": "marrom",
+        "marrons": "marrom",
+        "preta": "preta",
+        "pretas": "preta",
+        "preto": "preta",
+        "pretos": "preta",
+        "rosa": "rosa",
+        "rosas": "rosa",
+        "roxa": "roxa",
+        "roxas": "roxa",
+        "roxo": "roxa",
+        "roxos": "roxa",
+        "verde": "verde",
+        "verdes": "verde",
+        "vermelha": "vermelha",
+        "vermelhas": "vermelha",
+        "vermelho": "vermelha",
+        "vermelhos": "vermelha",
     }
 
     TAMANHOS = {
@@ -109,35 +136,38 @@ class Interpretador:
         "50",
     }
 
-    CATEGORIAS_ROUPA = {
-        "bermuda",
-        "blusa",
-        "calca",
-        "camisa",
-        "camiseta",
-        "jaqueta",
-        "saia",
-        "short",
-        "tenis",
-        "vestido",
+    CATEGORIAS_ROUPA_MAP = {
+        "bermuda": "bermuda",
+        "bermudas": "bermuda",
+        "blusa": "blusa",
+        "blusas": "blusa",
+        "calca": "calca",
+        "calcas": "calca",
+        "camisa": "camisa",
+        "camisas": "camisa",
+        "camiseta": "camiseta",
+        "camisetas": "camiseta",
+        "jaqueta": "jaqueta",
+        "jaquetas": "jaqueta",
+        "saia": "saia",
+        "saias": "saia",
+        "short": "short",
+        "shorts": "short",
+        "tenis": "tenis",
+        "vestido": "vestido",
+        "vestidos": "vestido",
     }
 
+    PALAVRAS_PRODUTO = set(CATEGORIAS_ROUPA_MAP) | set(CORES_MAP) | TAMANHOS
+
     def interpretar(self, msg: str) -> dict[str, Any]:
-        """
-        Interpreta uma mensagem e retorna uma análise estruturada.
-
-        Args:
-            msg: Mensagem original enviada ao Cooper.
-
-        Returns:
-            Dicionário contendo texto normalizado, domínio sugerido, intenção
-            sugerida e entidades básicas extraídas.
-        """
+        """Interpreta uma mensagem e retorna uma analise estruturada."""
         texto_original = msg or ""
         texto_normalizado = self._normalizar(texto_original)
-        dominio = self._identificar_dominio(texto_normalizado)
-        intencao = self._identificar_intencao(texto_normalizado, dominio)
+        tokens = self._tokenizar(texto_normalizado)
         entidades = self._extrair_entidades(texto_original)
+        dominio = self._identificar_dominio(tokens, entidades)
+        intencao = self._identificar_intencao(tokens, dominio, entidades)
 
         return {
             "texto_original": texto_original,
@@ -147,159 +177,158 @@ class Interpretador:
             "entidades": entidades,
         }
 
-
     def _normalizar(self, msg: str) -> str:
         texto = " ".join((msg or "").lower().strip().split())
-
         texto = unicodedata.normalize("NFD", texto)
-        texto = "".join(
-            c for c in texto
-            if unicodedata.category(c) != "Mn"
-        )
-
+        texto = "".join(c for c in texto if unicodedata.category(c) != "Mn")
         return texto
 
-    def _identificar_dominio(self, texto: str) -> str | None:
-        """
-        Sugere o domínio mais provável da mensagem.
+    def _tokenizar(self, texto: str) -> list[str]:
+        return [
+            token.strip(".,;:?!()[]{}")
+            for token in texto.split()
+            if token.strip(".,;:?!()[]{}")
+        ]
 
-        Args:
-            texto: Texto já normalizado.
+    def _identificar_dominio(
+        self,
+        tokens: list[str],
+        entidades: dict[str, Any],
+    ) -> str | None:
+        conjunto = set(tokens)
 
-        Returns:
-            Nome do domínio identificado ou None quando não houver evidência.
-        """
-        tokens = set(texto.split())
-
-        if tokens & {"vendi", "vender", "vende", "vendemos", "venda"}:
+        if conjunto & self.VERBOS_VENDA:
             return "vendas"
 
-        if tokens & {"entrada", "saida", "saldo", "inventario"}:
-            return "estoque"
-
-        if tokens & {"compra", "compras", "comprar", "comprei", "cotacao", "cotar"}:
+        if conjunto & self.TERMOS_COMPRAS:
             return "compras"
 
-        pontuacoes: dict[str, int] = {}
+        if conjunto & (
+            self.VERBOS_ENTRADA_ESTOQUE
+            | self.VERBOS_SAIDA_ESTOQUE
+            | self.TERMOS_INVENTARIO
+        ):
+            return "estoque"
 
-        for dominio, palavras in self.DOMINIOS.items():
-            pontuacoes[dominio] = len(tokens & palavras)
+        if conjunto & self.TERMOS_CONSULTA_ESTOQUE and entidades.get("produto"):
+            return "estoque"
 
-        melhor_dominio = max(pontuacoes, key=pontuacoes.get)
+        if entidades.get("categorias_roupa"):
+            return "estoque"
 
-        if pontuacoes[melhor_dominio] == 0:
-            return None
+        return None
 
-        return melhor_dominio
-
-    def _identificar_intencao(self, texto: str, dominio: str | None) -> str | None:
-        """
-        Sugere uma intenção inicial com base no texto e no domínio.
-
-        Args:
-            texto: Texto normalizado.
-            dominio: Domínio sugerido previamente.
-
-        Returns:
-            Nome da intenção sugerida ou None quando não houver evidência.
-        """
+    def _identificar_intencao(
+        self,
+        tokens: list[str],
+        dominio: str | None,
+        entidades: dict[str, Any],
+    ) -> str | None:
         if dominio is None:
             return None
 
+        conjunto = set(tokens)
+
         if dominio == "vendas":
-
-            tokens = set(texto.split())
-
-            if "orcamento" in tokens:
+            if "orcamento" in conjunto:
                 return "vendas_orcamento"
-
-            if "pedido" in tokens:
+            if "pedido" in conjunto:
                 return "vendas_pedido"
-
-            if "cliente" in tokens:
+            if "cliente" in conjunto:
                 return "vendas_cliente"
-
-            if "faturamento" in tokens:
+            if "faturamento" in conjunto:
                 return "vendas_faturamento"
-
-            if tokens & {
-                "vender",
-                "vende",
-                "vendi",
-                "vendemos",
-                "venda",
-            }:
+            if conjunto & self.VERBOS_VENDA:
                 return "vendas_registrar"
-
             return "vendas_geral"
 
         if dominio == "compras":
-
-            tokens = set(texto.split())
-
-            if tokens & {"cotacao", "cotar"}:
+            if conjunto & {"cotacao", "cotar"}:
                 return "compras_cotacao"
-
-            if "fornecedor" in tokens:
+            if "fornecedor" in conjunto:
                 return "compras_fornecedor"
-
-            if "reposicao" in tokens:
+            if "reposicao" in conjunto:
                 return "compras_reposicao"
-
-            if tokens & {
-                "compra",
-                "compras",
-                "comprar",
-                "comprei",
-                "compramos",
-            }:
+            if conjunto & {"compra", "compras", "comprar", "comprei", "compramos"}:
                 return "compras_registrar"
-
             return "compras_geral"
-    
+
         if dominio == "estoque":
-            if "saldo" in texto or "quantidade" in texto:
-                return "estoque_consulta_saldo"
-            if "entrada" in texto:
-                return "estoque_entrada"
-            if "saida" in texto:
-                return "estoque_saida"
-            if "inventario" in texto:
+            if conjunto & self.TERMOS_INVENTARIO:
                 return "estoque_inventario"
+            if conjunto & self.VERBOS_ENTRADA_ESTOQUE:
+                return "estoque_entrada"
+            if conjunto & self.VERBOS_SAIDA_ESTOQUE:
+                return "estoque_saida"
+            if conjunto & self.TERMOS_CONSULTA_ESTOQUE and entidades.get("produto"):
+                return "estoque_consulta_saldo"
             return "estoque_geral"
+
         return None
 
     def _extrair_entidades(self, msg: str) -> dict[str, Any]:
-        """
-        Extrai entidades simples da mensagem.
-        Args:
-            msg: Mensagem original.
-        Returns:
-            Dicionário com números e valores monetários encontrados.
-        """
-        numeros = re.findall(r"\b\d+(?:[.,]\d+)?\b", msg or "")
-        valores = re.findall(r"R\$\s*\d+(?:[.,]\d+)?", msg or "", flags=re.IGNORECASE)
         texto_normalizado = self._normalizar(msg)
-        tokens = set(texto_normalizado.split())
-        categorias = sorted(tokens & self.CATEGORIAS_ROUPA)
-        cores = sorted(tokens & self.CORES)
-        tamanhos = sorted(tokens & self.TAMANHOS)
+        tokens = self._tokenizar(texto_normalizado)
+        categorias = self._extrair_normalizados(tokens, self.CATEGORIAS_ROUPA_MAP)
+        cores = self._extrair_normalizados(tokens, self.CORES_MAP)
+        tamanhos = sorted({token for token in tokens if token in self.TAMANHOS})
+        valores = self._extrair_valores_monetarios(msg)
+
+        atributos_roupa = {
+            "categoria": categorias,
+            "cor": cores,
+            "tamanho": tamanhos,
+        }
+        produto = self._montar_produto_roupa(atributos_roupa)
+        if produto is None:
+            produto = self._extrair_produto_por_marcador(msg)
 
         return {
-            "numeros": numeros,
+            "numeros": re.findall(r"\b\d+(?:[.,]\d+)?\b", msg or ""),
             "valores_monetarios": valores,
-            "produto": self._extrair_produto(msg),
+            "produto": produto,
             "cores": cores,
             "tamanhos": tamanhos,
             "categorias_roupa": categorias,
-            "atributos_roupa": {
-                "categoria": categorias,
-                "cor": cores,
-                "tamanho": tamanhos,
-            },
+            "atributos_roupa": atributos_roupa,
         }
 
-    def _extrair_produto(self, msg: str) -> str | None:
+    def _extrair_normalizados(
+        self,
+        tokens: list[str],
+        mapa: dict[str, str],
+    ) -> list[str]:
+        encontrados = []
+        for token in tokens:
+            valor = mapa.get(token)
+            if valor and valor not in encontrados:
+                encontrados.append(valor)
+        return encontrados
+
+    def _extrair_valores_monetarios(self, msg: str) -> list[str]:
+        texto = msg or ""
+        valores = re.findall(r"R\$\s*\d+(?:[.,]\d+)?", texto, flags=re.IGNORECASE)
+        valores.extend(
+            re.findall(
+                r"\b(?:por|valor|preco|preco de)\s*(?:r\$\s*)?(\d+(?:[.,]\d+)?)",
+                self._normalizar(texto),
+            )
+        )
+        return valores
+
+    def _montar_produto_roupa(self, atributos: dict[str, list[str]]) -> str | None:
+        categoria = self._primeiro(atributos.get("categoria"))
+        if not categoria:
+            return None
+
+        partes = [
+            categoria,
+            self._primeiro(atributos.get("cor")),
+            self._primeiro(atributos.get("tamanho")),
+        ]
+        return " ".join(parte for parte in partes if parte)
+
+    def _extrair_produto_por_marcador(self, msg: str) -> str | None:
         texto = " ".join((msg or "").strip().split())
         texto_lower = self._normalizar(texto)
 
@@ -308,12 +337,22 @@ class Interpretador:
             "produtos ",
             "entrada de ",
             "saida de ",
+            "chegou ",
+            "chegaram ",
+            "recebi ",
+            "recebemos ",
+            "coloquei ",
             "vendi ",
+            "vendemos ",
             "vender ",
             "venda de ",
             "saldo de ",
             "saldo do ",
             "saldo da ",
+            "quantas ",
+            "quantos ",
+            "quanto ",
+            "tem ",
         ]
 
         for marcador in marcadores:
@@ -328,25 +367,41 @@ class Interpretador:
 
     def _limpar_produto(self, produto: str) -> str:
         palavras_descartadas = {
-            "por",
+            "aqui",
             "com",
+            "da",
             "de",
             "do",
-            "da",
-            "no",
+            "em",
+            "estoque",
+            "loja",
             "na",
+            "no",
+            "por",
+            "reais",
+            "real",
+            "tem",
+            "tenho",
             "unidade",
             "unidades",
         }
         partes = []
 
         for parte in produto.split():
-            if parte.lower().startswith("r$"):
+            palavra = self._normalizar(parte.strip(".,;:?!"))
+            if not palavra:
+                continue
+            if palavra.startswith("r$"):
                 break
-            if parte.replace(",", ".").replace(".", "", 1).isdigit():
+            if palavra.replace(",", ".").replace(".", "", 1).isdigit():
                 continue
-            if parte.lower() in palavras_descartadas:
+            if palavra in palavras_descartadas:
                 continue
-            partes.append(parte.strip(".,;:"))
+            partes.append(palavra)
 
         return " ".join(partes).strip()
+
+    def _primeiro(self, valores: list[str] | None) -> str | None:
+        if valores:
+            return valores[0]
+        return None
