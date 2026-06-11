@@ -67,18 +67,99 @@ class Interpretador:
         "tenho",
     }
 
-    TERMOS_INVENTARIO = {"inventario", "relatorio"}
+    TERMOS_INVENTARIO = {"inventario"}
+
+    TERMOS_RELATORIOS = {
+        "baixo",
+        "baixos",
+        "historico",
+        "hoje",
+        "relatorio",
+        "relatorios",
+    }
+
+    TERMOS_CONTAS = {
+        "caixa",
+        "contador",
+        "contas",
+        "deve",
+        "devendo",
+        "dever",
+        "financeiro",
+        "lucro",
+        "pagou",
+        "pago",
+        "receber",
+        "recebi",
+        "recebido",
+    }
 
     TERMOS_COMPRAS = {
         "compra",
         "compras",
         "comprar",
+        "compre",
         "comprei",
         "compramos",
         "cotacao",
         "cotar",
         "fornecedor",
         "reposicao",
+    }
+
+    TERMOS_PRECIFICACAO = {
+        "cobrar",
+        "custo",
+        "margem",
+        "paguei",
+        "preco",
+        "precificar",
+        "reembolso",
+        "sugere",
+        "sugerir",
+        "sugestao",
+        "valor",
+    }
+
+    TERMOS_PEDIDOS = {
+        "cliente",
+        "encomenda",
+        "encomendado",
+        "encomendou",
+        "encomendar",
+        "pedido",
+        "pedidos",
+        "pediu",
+        "confirmado",
+        "confirmei",
+        "confirmar",
+        "concluido",
+        "concluidos",
+        "conclui",
+        "encerrado",
+        "encerrados",
+        "entregue",
+        "entreguei",
+        "entregar",
+        "finalizado",
+        "finalizados",
+        "finalizei",
+        "pagamento",
+        "pagou",
+        "pago",
+        "pagos",
+        "recebi",
+        "recebido",
+    }
+
+    TERMOS_QUANTIDADE = {
+        "um": "1",
+        "uma": "1",
+        "dois": "2",
+        "duas": "2",
+        "tres": "3",
+        "quatro": "4",
+        "cinco": "5",
     }
 
     CORES_MAP = {
@@ -147,6 +228,10 @@ class Interpretador:
         "camisas": "camisa",
         "camiseta": "camiseta",
         "camisetas": "camiseta",
+        "calcinha": "calcinha",
+        "calcinhas": "calcinha",
+        "cueca": "cueca",
+        "cuecas": "cueca",
         "jaqueta": "jaqueta",
         "jaquetas": "jaqueta",
         "saia": "saia",
@@ -158,7 +243,23 @@ class Interpretador:
         "vestidos": "vestido",
     }
 
-    PALAVRAS_PRODUTO = set(CATEGORIAS_ROUPA_MAP) | set(CORES_MAP) | TAMANHOS
+    DETALHES_PRODUTO_MAP = {
+        "dupla": "duplo",
+        "duplas": "duplo",
+        "duplo": "duplo",
+        "duplos": "duplo",
+        "fio": "fio",
+        "fios": "fio",
+        "renda": "renda",
+        "rendas": "renda",
+    }
+
+    PALAVRAS_PRODUTO = (
+        set(CATEGORIAS_ROUPA_MAP)
+        | set(CORES_MAP)
+        | set(DETALHES_PRODUTO_MAP)
+        | TAMANHOS
+    )
 
     def interpretar(self, msg: str) -> dict[str, Any]:
         """Interpreta uma mensagem e retorna uma analise estruturada."""
@@ -197,6 +298,18 @@ class Interpretador:
     ) -> str | None:
         conjunto = set(tokens)
 
+        if self._parece_contas(conjunto, entidades):
+            return "contas"
+
+        if self._parece_relatorio(conjunto, entidades):
+            return "relatorios"
+
+        if self._parece_pedido(conjunto, entidades):
+            return "pedidos"
+
+        if self._parece_precificacao(conjunto, entidades):
+            return "precificacao"
+
         if conjunto & self.VERBOS_VENDA:
             return "vendas"
 
@@ -218,6 +331,118 @@ class Interpretador:
 
         return None
 
+    def _parece_contas(
+        self,
+        tokens: set[str],
+        entidades: dict[str, Any],
+    ) -> bool:
+        if tokens & {"contador", "contas", "financeiro", "caixa", "lucro"}:
+            return True
+
+        if tokens & {"deve", "devendo", "dever"}:
+            return True
+
+        if tokens & {"pagou", "pago", "recebi", "recebido"} and entidades.get(
+            "valores_monetarios"
+        ):
+            return True
+
+        if "receber" in tokens and tokens & {"quanto", "tenho", "valor"}:
+            return True
+
+        return False
+
+    def _parece_relatorio(
+        self,
+        tokens: set[str],
+        entidades: dict[str, Any],
+    ) -> bool:
+        if "historico" in tokens:
+            return True
+
+        if tokens & {"receber", "lucro"}:
+            return True
+
+        if tokens & {"pendente", "pendentes"} and (
+            tokens & {"pedido", "pedidos", "compra", "compras"}
+        ):
+            return True
+
+        if tokens & {
+            "concluido",
+            "concluidos",
+            "encerrado",
+            "encerrados",
+            "finalizado",
+            "finalizados",
+            "pago",
+            "pagos",
+        } and tokens & {"pedido", "pedidos"}:
+            return True
+
+        if tokens & {"relatorio", "relatorios"}:
+            return True
+
+        if tokens & {"baixo", "baixos"} and (
+            tokens & {"estoque", "produto", "produtos"}
+            or entidades.get("categorias_roupa")
+        ):
+            return True
+
+        if "hoje" in tokens and (
+            tokens & self.VERBOS_VENDA
+            or tokens & {"faturamento", "venda", "vendas"}
+        ):
+            return True
+
+        return False
+
+    def _parece_precificacao(
+        self,
+        tokens: set[str],
+        entidades: dict[str, Any],
+    ) -> bool:
+        if not entidades.get("valores_monetarios"):
+            return False
+
+        if tokens & self.TERMOS_PRECIFICACAO:
+            return True
+
+        if tokens & {"comprei", "compramos"}:
+            return True
+
+        return False
+
+    def _parece_pedido(
+        self,
+        tokens: set[str],
+        entidades: dict[str, Any],
+    ) -> bool:
+        if tokens & self.TERMOS_PEDIDOS:
+            return True
+
+        if tokens & self.VERBOS_VENDA and entidades.get("cliente"):
+            return True
+
+        if tokens & {
+            "concluido",
+            "conclui",
+            "finalizei",
+            "pagou",
+            "pago",
+            "recebi",
+            "recebido",
+        } and (entidades.get("cliente") or entidades.get("produto")):
+            return True
+
+        if tokens & {"compre", "comprei", "compramos"} and entidades.get("cliente"):
+            return True
+
+        if tokens & {"compre", "comprei", "compramos"} and entidades.get("produto"):
+            return not (tokens & {"valor", "preco", "custo", "paguei"})
+
+        return False
+
     def _identificar_intencao(
         self,
         tokens: list[str],
@@ -228,6 +453,21 @@ class Interpretador:
             return None
 
         conjunto = set(tokens)
+
+        if dominio == "contas":
+            if conjunto & {"pagou", "pago", "recebi", "recebido"}:
+                return "contas_registrar_pagamento"
+
+            if conjunto & {"deve", "devendo", "dever"}:
+                if entidades.get("valores_monetarios"):
+                    return "contas_registrar_divida"
+                return "contas_consultar_cliente"
+
+            if "receber" in conjunto:
+                return "contas_a_receber"
+            if "lucro" in conjunto:
+                return "contas_lucro"
+            return "contas_resumo"
 
         if dominio == "vendas":
             if "orcamento" in conjunto:
@@ -242,6 +482,93 @@ class Interpretador:
                 return "vendas_registrar"
             return "vendas_geral"
 
+        if dominio == "relatorios":
+            if "receber" in conjunto:
+                return "relatorios_valor_receber"
+
+            if "lucro" in conjunto:
+                return "relatorios_lucro"
+
+            if conjunto & {
+                "concluido",
+                "concluidos",
+                "encerrado",
+                "encerrados",
+                "finalizado",
+                "finalizados",
+                "pago",
+                "pagos",
+            } and conjunto & {"pedido", "pedidos"}:
+                return "relatorios_pedidos_concluidos"
+
+            if conjunto & {"pendente", "pendentes"} and conjunto & {"pedido", "pedidos"}:
+                return "relatorios_pedidos_pendentes"
+
+            if conjunto & {"pendente", "pendentes"} and conjunto & {"compra", "compras"}:
+                return "relatorios_compras_pendentes"
+
+            if "historico" in conjunto:
+                return "relatorios_historico_produto"
+
+            if conjunto & {"baixo", "baixos"}:
+                return "relatorios_estoque_baixo"
+
+            if "hoje" in conjunto and (
+                conjunto & self.VERBOS_VENDA
+                or conjunto & {"faturamento", "venda", "vendas"}
+            ):
+                return "relatorios_vendas_hoje"
+
+            return "relatorios_geral"
+
+        if dominio == "pedidos":
+            if (
+                conjunto & self.VERBOS_VENDA
+                or conjunto
+                & {
+                    "concluido",
+                    "concluidos",
+                    "conclui",
+                    "encerrado",
+                    "encerrados",
+                    "finalizei",
+                    "finalizado",
+                    "finalizados",
+                    "pagou",
+                    "pago",
+                    "pagos",
+                    "recebi",
+                    "recebido",
+                }
+            ) and (entidades.get("cliente") or entidades.get("produto")):
+                return "pedidos_concluir"
+
+            if conjunto & {"entregue", "entreguei", "entregar"}:
+                return "pedidos_entregar"
+
+            if conjunto & {"compre", "comprei", "compramos", "compra"}:
+                return "pedidos_registrar_compra"
+
+            if conjunto & {"confirmado", "confirmei", "confirmar"}:
+                return "pedidos_confirmar"
+
+            if conjunto & {
+                "cliente",
+                "encomenda",
+                "encomendado",
+                "encomendou",
+                "encomendar",
+                "pedido",
+                "pedidos",
+                "pediu",
+            }:
+                return "pedidos_criar"
+
+            return "pedidos_geral"
+
+        if dominio == "precificacao":
+            return "precificacao_sugerir_preco"
+
         if dominio == "compras":
             if conjunto & {"cotacao", "cotar"}:
                 return "compras_cotacao"
@@ -249,7 +576,14 @@ class Interpretador:
                 return "compras_fornecedor"
             if "reposicao" in conjunto:
                 return "compras_reposicao"
-            if conjunto & {"compra", "compras", "comprar", "comprei", "compramos"}:
+            if conjunto & {
+                "compra",
+                "compras",
+                "comprar",
+                "compre",
+                "comprei",
+                "compramos",
+            }:
                 return "compras_registrar"
             return "compras_geral"
 
@@ -271,23 +605,29 @@ class Interpretador:
         tokens = self._tokenizar(texto_normalizado)
         categorias = self._extrair_normalizados(tokens, self.CATEGORIAS_ROUPA_MAP)
         cores = self._extrair_normalizados(tokens, self.CORES_MAP)
+        detalhes = self._extrair_normalizados(tokens, self.DETALHES_PRODUTO_MAP)
         tamanhos = sorted({token for token in tokens if token in self.TAMANHOS})
         valores = self._extrair_valores_monetarios(msg)
+        quantidade = self._extrair_quantidade(tokens)
 
         atributos_roupa = {
             "categoria": categorias,
             "cor": cores,
+            "detalhe": detalhes,
             "tamanho": tamanhos,
         }
         produto = self._montar_produto_roupa(atributos_roupa)
         if produto is None:
-            produto = self._extrair_produto_por_marcador(msg)
+            produto = self._extrair_produto_generico(msg, tokens)
 
         return {
             "numeros": re.findall(r"\b\d+(?:[.,]\d+)?\b", msg or ""),
             "valores_monetarios": valores,
+            "quantidade": quantidade,
+            "cliente": self._extrair_cliente(msg),
             "produto": produto,
             "cores": cores,
+            "detalhes_produto": detalhes,
             "tamanhos": tamanhos,
             "categorias_roupa": categorias,
             "atributos_roupa": atributos_roupa,
@@ -310,11 +650,73 @@ class Interpretador:
         valores = re.findall(r"R\$\s*\d+(?:[.,]\d+)?", texto, flags=re.IGNORECASE)
         valores.extend(
             re.findall(
-                r"\b(?:por|valor|preco|preco de)\s*(?:r\$\s*)?(\d+(?:[.,]\d+)?)",
+                r"\b(?:por|valor(?: de)?|no valor de|preco(?: de)?|custo(?: de)?|paguei|deve|devendo|pagou|pago|recebi|recebido)\s*(?:r\$\s*)?(\d+(?:[.,]\d+)?)",
                 self._normalizar(texto),
             )
         )
         return valores
+
+    def _extrair_quantidade(self, tokens: list[str]) -> str | None:
+        for indice, token in enumerate(tokens[:-1]):
+            proximo = tokens[indice + 1]
+            if proximo not in self.CATEGORIAS_ROUPA_MAP:
+                continue
+
+            if token in self.TERMOS_QUANTIDADE:
+                return self.TERMOS_QUANTIDADE[token]
+
+            if token.replace(",", ".").replace(".", "", 1).isdigit():
+                return token
+
+        if any(token in self.CATEGORIAS_ROUPA_MAP for token in tokens):
+            return "1"
+
+        return None
+
+    def _extrair_cliente(self, msg: str) -> str | None:
+        texto = msg or ""
+        encomenda = re.search(
+            r"^\s*(\w+)\s+(?:me\s+)?encomendou\b",
+            texto,
+            flags=re.IGNORECASE,
+        )
+        if encomenda:
+            cliente = encomenda.group(1).strip()
+            if self._cliente_valido(cliente):
+                return cliente.capitalize()
+
+        padroes = [
+            r"^\s*([A-Za-zÀ-ÿ]+)\s+deve\b",
+            r"\bquanto\s+([A-Za-zÀ-ÿ]+)\s+deve\b",
+            r"\b([A-Za-zÀ-ÿ]+)\s+(?:esta\s+)?devendo\b",
+            r"\bcliente\s+([A-Za-zÀ-ÿ]+)",
+            r"\bpedido\s+(?:da|do|de)\s+([A-Za-zÀ-ÿ]+)",
+            r"\b(?:pra|para)\s+([A-Za-zÀ-ÿ]+)",
+            r"\b([A-Za-zÀ-ÿ]+)\s+(?:me\s+)?pagou\b",
+            r"\b(?:recebi|recebido)\s+(?:.+?\s)?(?:da|do|de)\s+([A-Za-zÀ-ÿ]+)",
+            r"\b(?:camiseta|camisa|calca|calcinha|cueca|bermuda|vestido|blusa|jaqueta|short|saia|tenis)\s+(?:da|do|de)\s+([A-Za-zÀ-ÿ]+)",
+        ]
+
+        for padrao in padroes:
+            encontrado = re.search(padrao, texto, flags=re.IGNORECASE)
+            if not encontrado:
+                continue
+
+            cliente = encontrado.group(1).strip()
+            if self._cliente_valido(cliente):
+                return cliente.capitalize()
+
+        return None
+
+    def _cliente_valido(self, cliente: str) -> bool:
+        palavra = self._normalizar(cliente)
+        return palavra not in {
+            "comprar",
+            "continuar",
+            "entregar",
+            "receber",
+            "vender",
+        }
 
     def _montar_produto_roupa(self, atributos: dict[str, list[str]]) -> str | None:
         categoria = self._primeiro(atributos.get("categoria"))
@@ -324,8 +726,9 @@ class Interpretador:
         partes = [
             categoria,
             self._primeiro(atributos.get("cor")),
-            self._primeiro(atributos.get("tamanho")),
         ]
+        partes.extend(atributos.get("detalhe") or [])
+        partes.append(self._primeiro(atributos.get("tamanho")))
         return " ".join(parte for parte in partes if parte)
 
     def _extrair_produto_por_marcador(self, msg: str) -> str | None:
@@ -365,10 +768,75 @@ class Interpretador:
 
         return None
 
+    def _extrair_produto_generico(
+        self,
+        msg: str,
+        tokens: list[str],
+    ) -> str | None:
+        produto = self._extrair_produto_por_marcador(msg)
+        if produto:
+            return produto
+
+        indices_valor = {
+            indice
+            for indice, token in enumerate(tokens)
+            if token in {"valor", "preco", "custo", "paguei", "por"}
+        }
+        palavras_descartadas = {
+            "comprei",
+            "compramos",
+            "uma",
+            "um",
+            "umas",
+            "uns",
+            "no",
+            "na",
+            "num",
+            "numa",
+            "de",
+            "do",
+            "da",
+            "por",
+            "valor",
+            "preco",
+            "custo",
+            "paguei",
+            "qual",
+            "quanto",
+            "vender",
+            "venda",
+            "cobrar",
+            "reais",
+            "real",
+        }
+        partes = []
+        inicio = 0
+
+        if tokens and tokens[0] == "paguei":
+            for indice, token in enumerate(tokens):
+                if token in {"num", "numa", "em", "no", "na"}:
+                    inicio = indice + 1
+                    indices_valor = set()
+                    break
+
+        for indice, token in enumerate(tokens[inicio:], start=inicio):
+            if any(indice >= valor_indice for valor_indice in indices_valor):
+                break
+            if token in palavras_descartadas:
+                continue
+            if token in {"valor", "preco", "custo"}:
+                break
+            if token.replace(",", ".").replace(".", "", 1).isdigit():
+                continue
+            partes.append(token)
+
+        return " ".join(partes).strip() or None
+
     def _limpar_produto(self, produto: str) -> str:
         palavras_descartadas = {
             "aqui",
             "com",
+            "custo",
             "da",
             "de",
             "do",
@@ -378,12 +846,14 @@ class Interpretador:
             "na",
             "no",
             "por",
+            "preco",
             "reais",
             "real",
             "tem",
             "tenho",
             "unidade",
             "unidades",
+            "valor",
         }
         partes = []
 

@@ -51,7 +51,7 @@ class EstoqueAgent(BaseAgent):
     ) -> dict[str, Any]:
         intencao = str((analise or {}).get("intencao") or "estoque_geral")
         entidades = self.entidades(analise)
-        quantidade_texto = self.primeiro_numero(analise)
+        quantidade_texto = entidades.get("quantidade") or self.primeiro_numero(analise)
         quantidade = self._converter_quantidade(quantidade_texto)
         produto = entidades.get("produto")
         atributos = entidades.get("atributos_roupa") or {}

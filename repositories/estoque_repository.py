@@ -1,9 +1,10 @@
 """Persistencia SQLite para o estoque do Cooper."""
 
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 import sqlite3
-from typing import Any
+from typing import Any, Iterator
 
 
 class EstoqueRepository:
@@ -64,6 +65,73 @@ class EstoqueRepository:
             ).fetchall()
 
         return [self._produto_com_saldo(linha) for linha in linhas]
+
+    def listar_estoque_baixo(self, limite: float = 3) -> list[dict[str, Any]]:
+        """Lista produtos com saldo menor ou igual ao limite informado."""
+        with self._conectar() as conexao:
+            linhas = conexao.execute(
+                """
+                SELECT
+                    p.id,
+                    p.nome,
+                    p.categoria,
+                    p.cor,
+                    p.tamanho,
+                    p.sku,
+                    COALESCE(e.quantidade, 0) AS quantidade
+                FROM produtos p
+                LEFT JOIN estoque e ON e.produto_id = p.id
+                WHERE COALESCE(e.quantidade, 0) <= ?
+                ORDER BY quantidade ASC, p.nome, p.cor, p.tamanho
+                """,
+                (limite,),
+            ).fetchall()
+
+        return [self._produto_com_saldo(linha) for linha in linhas]
+
+    def historico(
+        self,
+        produto: str,
+        atributos: dict[str, Any] | None = None,
+        limite: int = 10,
+    ) -> dict[str, Any] | None:
+        """Retorna os movimentos recentes de uma variacao de produto."""
+        item = self.consultar(produto, atributos)
+        if item is None:
+            return None
+
+        with self._conectar() as conexao:
+            linhas = conexao.execute(
+                """
+                SELECT
+                    id,
+                    tipo,
+                    quantidade,
+                    quantidade_anterior,
+                    quantidade_atual,
+                    criado_em
+                FROM estoque_movimentos
+                WHERE produto_id = ?
+                ORDER BY id DESC
+                LIMIT ?
+                """,
+                (item["produto_id"], limite),
+            ).fetchall()
+
+        return {
+            "produto": item,
+            "movimentos": [
+                {
+                    "movimento_id": linha["id"],
+                    "tipo": linha["tipo"],
+                    "quantidade": linha["quantidade"],
+                    "quantidade_anterior": linha["quantidade_anterior"],
+                    "quantidade_atual": linha["quantidade_atual"],
+                    "criado_em": linha["criado_em"],
+                }
+                for linha in linhas
+            ],
+        }
 
     def registrar_entrada(
         self,
@@ -308,10 +376,18 @@ class EstoqueRepository:
                 """
             )
 
-    def _conectar(self) -> sqlite3.Connection:
+    @contextmanager
+    def _conectar(self) -> Iterator[sqlite3.Connection]:
         conexao = sqlite3.connect(self.db_path)
         conexao.row_factory = sqlite3.Row
-        return conexao
+        try:
+            yield conexao
+            conexao.commit()
+        except Exception:
+            conexao.rollback()
+            raise
+        finally:
+            conexao.close()
 
     def _estoque_antigo(self, conexao: sqlite3.Connection) -> bool:
         tabela = conexao.execute(

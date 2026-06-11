@@ -59,7 +59,7 @@ class VendasAgent(BaseAgent):
         intencao = self._definir_intencao(msg, analise=analise)
         entidades = self.entidades(analise)
         valor_texto = self.primeiro_valor_monetario(analise)
-        quantidade_texto = self.primeiro_numero(analise)
+        quantidade_texto = entidades.get("quantidade") or self.primeiro_numero(analise)
         valor = self._converter_valor(valor_texto)
         quantidade = self._converter_numero(quantidade_texto)
         produto = entidades.get("produto")

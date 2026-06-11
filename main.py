@@ -7,13 +7,19 @@ para evoluir agentes, intencoes e respostas.
 """
 
 from agents.compras_agent import ComprasAgent
+from agents.contas_agent import ContasAgent
 from agents.estoque_agent import EstoqueAgent
+from agents.pedidos_agent import PedidosAgent
+from agents.precificacao_agent import PrecificacaoAgent
+from agents.relatorios_agent import RelatoriosAgent
 from agents.vendas_agent import VendasAgent
 from core.cooper import Cooper
 from core.response_builder import ResponseBuilder
 from core.router import Router
 from nlp.interpretador import Interpretador
+from repositories.contas_repository import ContasRepository
 from repositories.estoque_repository import EstoqueRepository
+from repositories.pedidos_repository import PedidosRepository
 from repositories.vendas_repository import VendasRepository
 
 
@@ -40,9 +46,24 @@ def criar_cooper() -> Cooper:
     """
     estoque_repository = EstoqueRepository()
     vendas_repository = VendasRepository()
+    pedidos_repository = PedidosRepository()
+    contas_repository = ContasRepository()
 
     router = Router(
         agents=[
+            ContasAgent(
+                pedidos_repository=pedidos_repository,
+                contas_repository=contas_repository,
+            ),
+            RelatoriosAgent(
+                estoque_repository=estoque_repository,
+                vendas_repository=vendas_repository,
+                pedidos_repository=pedidos_repository,
+            ),
+            PedidosAgent(
+                repository=pedidos_repository,
+            ),
+            PrecificacaoAgent(),
             VendasAgent(
                 estoque_repository=estoque_repository,
                 vendas_repository=vendas_repository,
@@ -77,6 +98,19 @@ def exibir_exemplos() -> None:
     print("  saida de 2 produto camiseta preta m")
     print("  entrada de 4 produto camiseta preta g")
     print("  inventario estoque")
+    print("  quanto vendi hoje?")
+    print("  produtos com estoque baixo")
+    print("  historico da camiseta preta m")
+    print("  cliente Maria pediu uma camiseta preta m por 80")
+    print("  confirmei pedido da Maria")
+    print("  comprei a camiseta da Maria por 45")
+    print("  entreguei pedido da Maria")
+    print("  quais pedidos pendentes?")
+    print("  pedidos concluidos")
+    print("  quanto tenho pra receber?")
+    print("  contador")
+    print("  qual meu lucro?")
+    print("  comprei uma calca no valor de 100")
 
 
 def parece_resposta_colada(msg: str) -> bool:
