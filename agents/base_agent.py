@@ -89,6 +89,36 @@ class BaseAgent(ABC):
             "dados": dados or {},
             "erro": erro,
         }
+
+    def entidades(self, analise: dict[str, Any] | None = None) -> dict[str, Any]:
+        """Retorna as entidades extraidas pela camada de interpretacao."""
+        if not analise:
+            return {}
+
+        entidades = analise.get("entidades")
+        if isinstance(entidades, dict):
+            return entidades
+
+        return {}
+
+    def primeiro_numero(self, analise: dict[str, Any] | None = None) -> str | None:
+        """Retorna o primeiro numero identificado na mensagem, quando existir."""
+        numeros = self.entidades(analise).get("numeros") or []
+        if numeros:
+            return str(numeros[0])
+
+        return None
+
+    def primeiro_valor_monetario(
+        self,
+        analise: dict[str, Any] | None = None,
+    ) -> str | None:
+        """Retorna o primeiro valor monetario identificado, quando existir."""
+        valores = self.entidades(analise).get("valores_monetarios") or []
+        if valores:
+            return str(valores[0])
+
+        return None
         
     def __repr__(self) -> str:
         """Retorna uma representação simples do agente para depuração."""

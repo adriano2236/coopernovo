@@ -1,0 +1,1 @@
+"""Nucleo central do Cooper."""

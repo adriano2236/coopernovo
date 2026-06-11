@@ -47,6 +47,7 @@ class Interpretador:
             "compramos",
             "fornecedor",
             "cotacao",
+            "cotar",
             "reposicao",
         },
         "estoque": {
@@ -57,7 +58,68 @@ class Interpretador:
             "inventario",
             "entrada",
             "saida",
+            "camiseta",
+            "camisa",
+            "calca",
+            "bermuda",
+            "vestido",
+            "blusa",
+            "jaqueta",
+            "short",
+            "saia",
+            "tenis",
         },
+    }
+
+    CORES = {
+        "amarelo",
+        "amarela",
+        "azul",
+        "bege",
+        "branco",
+        "branca",
+        "cinza",
+        "laranja",
+        "marrom",
+        "preto",
+        "preta",
+        "rosa",
+        "roxo",
+        "roxa",
+        "verde",
+        "vermelho",
+        "vermelha",
+    }
+
+    TAMANHOS = {
+        "pp",
+        "p",
+        "m",
+        "g",
+        "gg",
+        "xg",
+        "xgg",
+        "36",
+        "38",
+        "40",
+        "42",
+        "44",
+        "46",
+        "48",
+        "50",
+    }
+
+    CATEGORIAS_ROUPA = {
+        "bermuda",
+        "blusa",
+        "calca",
+        "camisa",
+        "camiseta",
+        "jaqueta",
+        "saia",
+        "short",
+        "tenis",
+        "vestido",
     }
 
     def interpretar(self, msg: str) -> dict[str, Any]:
@@ -107,9 +169,18 @@ class Interpretador:
         Returns:
             Nome do domínio identificado ou None quando não houver evidência.
         """
-        pontuacoes: dict[str, int] = {}
-
         tokens = set(texto.split())
+
+        if tokens & {"vendi", "vender", "vende", "vendemos", "venda"}:
+            return "vendas"
+
+        if tokens & {"entrada", "saida", "saldo", "inventario"}:
+            return "estoque"
+
+        if tokens & {"compra", "compras", "comprar", "comprei", "cotacao", "cotar"}:
+            return "compras"
+
+        pontuacoes: dict[str, int] = {}
 
         for dominio, palavras in self.DOMINIOS.items():
             pontuacoes[dominio] = len(tokens & palavras)
@@ -139,15 +210,6 @@ class Interpretador:
 
             tokens = set(texto.split())
 
-            if tokens & {
-                "vender",
-                "vende",
-                "vendi",
-                "vendemos",
-                "venda",
-            }:
-                return "vendas_registrar"
-
             if "orcamento" in tokens:
                 return "vendas_orcamento"
 
@@ -160,13 +222,22 @@ class Interpretador:
             if "faturamento" in tokens:
                 return "vendas_faturamento"
 
+            if tokens & {
+                "vender",
+                "vende",
+                "vendi",
+                "vendemos",
+                "venda",
+            }:
+                return "vendas_registrar"
+
             return "vendas_geral"
 
         if dominio == "compras":
 
             tokens = set(texto.split())
 
-            if "cotacao" in tokens:
+            if tokens & {"cotacao", "cotar"}:
                 return "compras_cotacao"
 
             if "fornecedor" in tokens:
@@ -208,7 +279,74 @@ class Interpretador:
         """
         numeros = re.findall(r"\b\d+(?:[.,]\d+)?\b", msg or "")
         valores = re.findall(r"R\$\s*\d+(?:[.,]\d+)?", msg or "", flags=re.IGNORECASE)
+        texto_normalizado = self._normalizar(msg)
+        tokens = set(texto_normalizado.split())
+        categorias = sorted(tokens & self.CATEGORIAS_ROUPA)
+        cores = sorted(tokens & self.CORES)
+        tamanhos = sorted(tokens & self.TAMANHOS)
+
         return {
             "numeros": numeros,
             "valores_monetarios": valores,
+            "produto": self._extrair_produto(msg),
+            "cores": cores,
+            "tamanhos": tamanhos,
+            "categorias_roupa": categorias,
+            "atributos_roupa": {
+                "categoria": categorias,
+                "cor": cores,
+                "tamanho": tamanhos,
+            },
         }
+
+    def _extrair_produto(self, msg: str) -> str | None:
+        texto = " ".join((msg or "").strip().split())
+        texto_lower = self._normalizar(texto)
+
+        marcadores = [
+            "produto ",
+            "produtos ",
+            "entrada de ",
+            "saida de ",
+            "vendi ",
+            "vender ",
+            "venda de ",
+            "saldo de ",
+            "saldo do ",
+            "saldo da ",
+        ]
+
+        for marcador in marcadores:
+            indice = texto_lower.find(marcador)
+            if indice >= 0:
+                inicio = indice + len(marcador)
+                produto = texto[inicio:].strip()
+                produto = self._limpar_produto(produto)
+                return produto or None
+
+        return None
+
+    def _limpar_produto(self, produto: str) -> str:
+        palavras_descartadas = {
+            "por",
+            "com",
+            "de",
+            "do",
+            "da",
+            "no",
+            "na",
+            "unidade",
+            "unidades",
+        }
+        partes = []
+
+        for parte in produto.split():
+            if parte.lower().startswith("r$"):
+                break
+            if parte.replace(",", ".").replace(".", "", 1).isdigit():
+                continue
+            if parte.lower() in palavras_descartadas:
+                continue
+            partes.append(parte.strip(".,;:"))
+
+        return " ".join(partes).strip()
