@@ -33,6 +33,8 @@ class Cooper:
         router: Router,
         response_builder: ResponseBuilder | None = None,
         interpretador: Any | None = None,
+        memoria_repository: Any | None = None,
+        memoria_agent: Any | None = None,
     ) -> None:
         """
         Inicializa o Cooper com suas dependências principais.
@@ -50,6 +52,8 @@ class Cooper:
         self.router = router
         self.response_builder = response_builder or ResponseBuilder()
         self.interpretador = interpretador
+        self.memoria_repository = memoria_repository
+        self.memoria_agent = memoria_agent
 
     def responder(self, msg: str) -> str:
         """
@@ -82,7 +86,9 @@ class Cooper:
             Dicionário padronizado retornado pelo Router ou pelo agente.
         """
         analise = self._analisar(msg)
-        return self.router.rotear(msg, analise=analise)
+        resultado = self.router.rotear(msg, analise=analise)
+        self._registrar_evento_memoria(msg, analise, resultado)
+        return resultado
 
     def _analisar(self, msg: str) -> dict[str, Any] | None:
         """
@@ -106,6 +112,43 @@ class Cooper:
         raise TypeError(
             "interpretador deve ser callable ou possuir um método interpretar(msg)."
         )
+
+    def _registrar_evento_memoria(
+        self,
+        msg: str,
+        analise: dict[str, Any] | None,
+        resultado: dict[str, Any] | None,
+    ) -> None:
+        """Registra historico de conversa quando a memoria estiver configurada."""
+        if self.memoria_repository is None:
+            return
+
+        if not hasattr(self.memoria_repository, "registrar_evento"):
+            return
+
+        try:
+            self.memoria_repository.registrar_evento(
+                texto=msg,
+                analise=analise,
+                resultado=resultado,
+            )
+        except Exception:
+            return
+
+        if self.memoria_agent is None:
+            return
+
+        if not hasattr(self.memoria_agent, "aprender_com_evento"):
+            return
+
+        try:
+            self.memoria_agent.aprender_com_evento(
+                texto=msg,
+                analise=analise,
+                resultado=resultado,
+            )
+        except Exception:
+            return
 
     def registrar_agent(self, agent: BaseAgent) -> None:
         """

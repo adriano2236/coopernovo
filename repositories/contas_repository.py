@@ -95,6 +95,108 @@ class ContasRepository:
 
         return self.buscar_por_id(conta_id)
 
+    def registrar_despesa(
+        self,
+        descricao: str,
+        valor: float,
+        categoria: str | None = None,
+    ) -> dict[str, Any]:
+        """Registra uma despesa paga e sua saida de caixa."""
+        agora = self._agora()
+        descricao_final = " ".join((descricao or "despesa avulsa").strip().split())
+        categoria_final = categoria or "geral"
+
+        with self._conectar() as conexao:
+            cursor = conexao.execute(
+                """
+                INSERT INTO despesas (
+                    descricao,
+                    categoria,
+                    valor,
+                    criado_em,
+                    atualizado_em
+                )
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (
+                    descricao_final,
+                    categoria_final,
+                    valor,
+                    agora,
+                    agora,
+                ),
+            )
+            despesa_id = cursor.lastrowid
+            conexao.execute(
+                """
+                INSERT INTO caixa_movimentos (
+                    tipo,
+                    origem,
+                    referencia_id,
+                    descricao,
+                    valor,
+                    criado_em
+                )
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    "saida",
+                    "despesa",
+                    despesa_id,
+                    descricao_final,
+                    valor,
+                    agora,
+                ),
+            )
+
+        despesa = self.buscar_despesa(despesa_id)
+        if despesa:
+            despesa["saldo_caixa"] = self.saldo_caixa()
+        return despesa or {"despesa_id": despesa_id}
+
+    def registrar_movimento_caixa(
+        self,
+        tipo: str,
+        valor: float,
+        descricao: str | None = None,
+        origem: str = "manual",
+        referencia_id: int | None = None,
+    ) -> dict[str, Any]:
+        """Registra uma entrada ou saida no caixa."""
+        tipo_normalizado = self._normalizar(tipo)
+        if tipo_normalizado not in {"entrada", "saida"}:
+            raise ValueError("tipo de movimento deve ser entrada ou saida")
+
+        agora = self._agora()
+        descricao_final = " ".join((descricao or tipo_normalizado).strip().split())
+        with self._conectar() as conexao:
+            cursor = conexao.execute(
+                """
+                INSERT INTO caixa_movimentos (
+                    tipo,
+                    origem,
+                    referencia_id,
+                    descricao,
+                    valor,
+                    criado_em
+                )
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    tipo_normalizado,
+                    origem,
+                    referencia_id,
+                    descricao_final,
+                    valor,
+                    agora,
+                ),
+            )
+
+        movimento = self.buscar_movimento_caixa(cursor.lastrowid)
+        if movimento:
+            movimento["saldo_caixa"] = self.saldo_caixa()
+        return movimento or {"movimento_id": cursor.lastrowid}
+
     def resumo_cliente(self, cliente: str) -> dict[str, Any]:
         """Resume quanto um cliente ainda deve em contas avulsas."""
         cliente_normalizado = self._normalizar(cliente)
@@ -142,6 +244,67 @@ class ContasRepository:
             "valor_recebido": resumo["valor_recebido"],
         }
 
+    def saldo_caixa(self) -> float:
+        """Calcula o saldo atual do caixa."""
+        resumo = self.resumo_caixa()
+        return float(resumo.get("caixa_saldo") or 0)
+
+    def resumo_caixa(self) -> dict[str, Any]:
+        """Resume entradas, saidas e saldo do caixa."""
+        with self._conectar() as conexao:
+            resumo = conexao.execute(
+                """
+                SELECT
+                    COALESCE(SUM(CASE WHEN tipo = 'entrada'
+                        THEN valor ELSE 0 END), 0) AS caixa_entradas,
+                    COALESCE(SUM(CASE WHEN tipo = 'saida'
+                        THEN valor ELSE 0 END), 0) AS caixa_saidas,
+                    COUNT(*) AS total_movimentos
+                FROM caixa_movimentos
+                """
+            ).fetchone()
+
+        entradas = float(resumo["caixa_entradas"] or 0)
+        saidas = float(resumo["caixa_saidas"] or 0)
+        return {
+            "caixa_entradas": entradas,
+            "caixa_saidas": saidas,
+            "caixa_saldo": entradas - saidas,
+            "total_movimentos_caixa": resumo["total_movimentos"],
+        }
+
+    def resumo_despesas(self) -> dict[str, Any]:
+        """Resume despesas registradas."""
+        with self._conectar() as conexao:
+            resumo = conexao.execute(
+                """
+                SELECT
+                    COUNT(*) AS total_despesas,
+                    COALESCE(SUM(valor), 0) AS valor_despesas
+                FROM despesas
+                """
+            ).fetchone()
+
+        return {
+            "total_despesas": resumo["total_despesas"],
+            "valor_despesas": resumo["valor_despesas"],
+        }
+
+    def listar_despesas(self, limite: int = 20) -> list[dict[str, Any]]:
+        """Lista despesas recentes."""
+        with self._conectar() as conexao:
+            linhas = conexao.execute(
+                """
+                SELECT *
+                FROM despesas
+                ORDER BY criado_em DESC, id DESC
+                LIMIT ?
+                """,
+                (limite,),
+            ).fetchall()
+
+        return [self._despesa_dict(linha) for linha in linhas]
+
     def listar_abertas(self) -> list[dict[str, Any]]:
         """Lista contas avulsas ainda nao quitadas."""
         with self._conectar() as conexao:
@@ -165,6 +328,26 @@ class ContasRepository:
             ).fetchone()
 
         return self._conta_dict(linha) if linha else None
+
+    def buscar_despesa(self, despesa_id: int) -> dict[str, Any] | None:
+        """Busca uma despesa pelo id."""
+        with self._conectar() as conexao:
+            linha = conexao.execute(
+                "SELECT * FROM despesas WHERE id = ?",
+                (despesa_id,),
+            ).fetchone()
+
+        return self._despesa_dict(linha) if linha else None
+
+    def buscar_movimento_caixa(self, movimento_id: int) -> dict[str, Any] | None:
+        """Busca um movimento de caixa pelo id."""
+        with self._conectar() as conexao:
+            linha = conexao.execute(
+                "SELECT * FROM caixa_movimentos WHERE id = ?",
+                (movimento_id,),
+            ).fetchone()
+
+        return self._caixa_movimento_dict(linha) if linha else None
 
     def _buscar_conta_aberta(self, cliente: str) -> dict[str, Any] | None:
         cliente_normalizado = self._normalizar(cliente)
@@ -201,6 +384,31 @@ class ContasRepository:
                 )
                 """
             )
+            conexao.execute(
+                """
+                CREATE TABLE IF NOT EXISTS despesas (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    descricao TEXT NOT NULL,
+                    categoria TEXT,
+                    valor REAL NOT NULL,
+                    criado_em TEXT NOT NULL,
+                    atualizado_em TEXT NOT NULL
+                )
+                """
+            )
+            conexao.execute(
+                """
+                CREATE TABLE IF NOT EXISTS caixa_movimentos (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    tipo TEXT NOT NULL,
+                    origem TEXT NOT NULL,
+                    referencia_id INTEGER,
+                    descricao TEXT,
+                    valor REAL NOT NULL,
+                    criado_em TEXT NOT NULL
+                )
+                """
+            )
 
     @contextmanager
     def _conectar(self) -> Iterator[sqlite3.Connection]:
@@ -229,6 +437,29 @@ class ContasRepository:
             "criado_em": linha["criado_em"],
             "atualizado_em": linha["atualizado_em"],
             "quitado_em": linha["quitado_em"],
+        }
+
+    def _despesa_dict(self, linha: sqlite3.Row) -> dict[str, Any]:
+        return {
+            "tipo_resultado": "despesa",
+            "despesa_id": linha["id"],
+            "descricao": linha["descricao"],
+            "categoria": linha["categoria"],
+            "valor": linha["valor"],
+            "criado_em": linha["criado_em"],
+            "atualizado_em": linha["atualizado_em"],
+        }
+
+    def _caixa_movimento_dict(self, linha: sqlite3.Row) -> dict[str, Any]:
+        return {
+            "tipo_resultado": "caixa_movimento",
+            "movimento_id": linha["id"],
+            "movimento_tipo": linha["tipo"],
+            "origem": linha["origem"],
+            "referencia_id": linha["referencia_id"],
+            "descricao": linha["descricao"],
+            "valor": linha["valor"],
+            "criado_em": linha["criado_em"],
         }
 
     def _normalizar(self, valor: str) -> str:

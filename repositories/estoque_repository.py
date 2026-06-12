@@ -89,6 +89,57 @@ class EstoqueRepository:
 
         return [self._produto_com_saldo(linha) for linha in linhas]
 
+    def buscar_por_termo(
+        self,
+        termo: str,
+        limite: int = 10,
+    ) -> list[dict[str, Any]]:
+        """Busca produtos cadastrados no estoque por texto livre."""
+        tokens = self._tokens_busca(termo)
+        if not tokens:
+            return []
+
+        filtros = []
+        parametros: list[Any] = []
+        for token in tokens:
+            like = f"%{token}%"
+            filtros.append(
+                """
+                (
+                    p.nome_normalizado LIKE ?
+                    OR LOWER(COALESCE(p.categoria, '')) LIKE ?
+                    OR LOWER(COALESCE(p.cor, '')) LIKE ?
+                    OR LOWER(COALESCE(p.tamanho, '')) LIKE ?
+                    OR LOWER(COALESCE(p.sku, '')) LIKE ?
+                )
+                """
+            )
+            parametros.extend([like, like, like, like, like])
+
+        parametros.append(limite)
+
+        with self._conectar() as conexao:
+            linhas = conexao.execute(
+                f"""
+                SELECT
+                    p.id,
+                    p.nome,
+                    p.categoria,
+                    p.cor,
+                    p.tamanho,
+                    p.sku,
+                    COALESCE(e.quantidade, 0) AS quantidade
+                FROM produtos p
+                LEFT JOIN estoque e ON e.produto_id = p.id
+                WHERE {' AND '.join(filtros)}
+                ORDER BY p.nome, p.cor, p.tamanho
+                LIMIT ?
+                """,
+                parametros,
+            ).fetchall()
+
+        return [self._produto_com_saldo(linha) for linha in linhas]
+
     def historico(
         self,
         produto: str,
@@ -494,3 +545,25 @@ class EstoqueRepository:
 
     def _normalizar_produto(self, produto: str) -> str:
         return " ".join((produto or "").strip().lower().split())
+
+    def _tokens_busca(self, termo: str) -> list[str]:
+        descartadas = {
+            "a",
+            "as",
+            "da",
+            "das",
+            "de",
+            "do",
+            "dos",
+            "estoque",
+            "o",
+            "os",
+            "produto",
+            "produtos",
+            "saldo",
+        }
+        return [
+            token
+            for token in self._normalizar_produto(termo).split()
+            if token and token not in descartadas
+        ]

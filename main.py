@@ -8,7 +8,12 @@ para evoluir agentes, intencoes e respostas.
 
 from agents.compras_agent import ComprasAgent
 from agents.contas_agent import ContasAgent
+from agents.backup_agent import BackupAgent
+from agents.busca_agent import BuscaAgent
+from agents.clientes_agent import ClientesAgent
 from agents.estoque_agent import EstoqueAgent
+from agents.fornecedores_agent import FornecedoresAgent
+from agents.memoria_agent import MemoriaAgent
 from agents.pedidos_agent import PedidosAgent
 from agents.precificacao_agent import PrecificacaoAgent
 from agents.relatorios_agent import RelatoriosAgent
@@ -17,8 +22,12 @@ from core.cooper import Cooper
 from core.response_builder import ResponseBuilder
 from core.router import Router
 from nlp.interpretador import Interpretador
+from repositories.backup_repository import BackupRepository
+from repositories.clientes_repository import ClientesRepository
 from repositories.contas_repository import ContasRepository
 from repositories.estoque_repository import EstoqueRepository
+from repositories.fornecedores_repository import FornecedoresRepository
+from repositories.memoria_repository import MemoriaRepository
 from repositories.pedidos_repository import PedidosRepository
 from repositories.vendas_repository import VendasRepository
 
@@ -48,9 +57,35 @@ def criar_cooper() -> Cooper:
     vendas_repository = VendasRepository()
     pedidos_repository = PedidosRepository()
     contas_repository = ContasRepository()
+    clientes_repository = ClientesRepository()
+    fornecedores_repository = FornecedoresRepository()
+    memoria_repository = MemoriaRepository()
+    backup_repository = BackupRepository()
+    memoria_agent = MemoriaAgent(
+        repository=memoria_repository,
+    )
 
     router = Router(
         agents=[
+            memoria_agent,
+            BackupAgent(
+                repository=backup_repository,
+            ),
+            BuscaAgent(
+                clientes_repository=clientes_repository,
+                pedidos_repository=pedidos_repository,
+                fornecedores_repository=fornecedores_repository,
+                estoque_repository=estoque_repository,
+            ),
+            FornecedoresAgent(
+                repository=fornecedores_repository,
+            ),
+            ClientesAgent(
+                repository=clientes_repository,
+            ),
+            PedidosAgent(
+                repository=pedidos_repository,
+            ),
             ContasAgent(
                 pedidos_repository=pedidos_repository,
                 contas_repository=contas_repository,
@@ -59,9 +94,6 @@ def criar_cooper() -> Cooper:
                 estoque_repository=estoque_repository,
                 vendas_repository=vendas_repository,
                 pedidos_repository=pedidos_repository,
-            ),
-            PedidosAgent(
-                repository=pedidos_repository,
             ),
             PrecificacaoAgent(),
             VendasAgent(
@@ -77,6 +109,8 @@ def criar_cooper() -> Cooper:
         router=router,
         response_builder=ResponseBuilder(),
         interpretador=Interpretador(),
+        memoria_repository=memoria_repository,
+        memoria_agent=memoria_agent,
     )
 
 
@@ -101,16 +135,56 @@ def exibir_exemplos() -> None:
     print("  quanto vendi hoje?")
     print("  produtos com estoque baixo")
     print("  historico da camiseta preta m")
+    print("  cadastre cliente Maria telefone 11999999999")
+    print("  endereco da Maria e rua das flores 123")
+    print("  anota no cliente Maria que prefere pagar no pix")
+    print("  dados da Maria")
+    print("  listar clientes")
+    print("  cadastre fornecedor Moda Bella telefone 11988887777")
+    print("  fornecedor Moda Bella vende calcinha preta fio duplo g por 10")
+    print("  anota no fornecedor Moda Bella que entrega rapido")
+    print("  dados do fornecedor Moda Bella")
+    print("  fornecedores da calcinha preta")
+    print("  listar fornecedores")
+    print("  buscar Maria")
+    print("  procura calcinha preta")
+    print("  encontrar pedido 1")
+    print("  buscar fornecedor Moda Bella")
     print("  cliente Maria pediu uma camiseta preta m por 80")
     print("  confirmei pedido da Maria")
     print("  comprei a camiseta da Maria por 45")
+    print("  Maria pagou 40")
+    print("  quanto Maria deve?")
+    print("  altera valor do pedido da Maria para 90")
+    print("  troca tamanho do pedido da Maria para g")
+    print("  cancela pedido da Maria")
+    print("  cancela pedido 1")
+    print("  historico do pedido da Maria")
+    print("  historico do pedido 1")
     print("  entreguei pedido da Maria")
+    print("  concluir pedido da Maria")
     print("  quais pedidos pendentes?")
     print("  pedidos concluidos")
     print("  quanto tenho pra receber?")
     print("  contador")
     print("  qual meu lucro?")
+    print("  gastei 20 com embalagem")
+    print("  paguei motoboy 15")
+    print("  entrou 100 no caixa")
+    print("  saiu 10 do caixa para gasolina")
+    print("  quanto tem no caixa?")
+    print("  despesas")
     print("  comprei uma calca no valor de 100")
+    print("  lembre que eu normalmente dobro o valor da peca")
+    print("  o que voce lembra?")
+    print("  memoria operacional")
+    print("  aprendizados")
+    print("  memoria estrategica")
+    print("  historico de conversa")
+    print("  fazer backup")
+    print("  exportar dados")
+    print("  exportar planilha")
+    print("  listar backups")
 
 
 def parece_resposta_colada(msg: str) -> bool:
