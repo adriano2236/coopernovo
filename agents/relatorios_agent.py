@@ -3,6 +3,7 @@
 from typing import Any
 
 from agents.base_agent import BaseAgent
+from repositories.contas_repository import ContasRepository
 from repositories.estoque_repository import EstoqueRepository
 from repositories.pedidos_repository import PedidosRepository
 from repositories.vendas_repository import VendasRepository
@@ -17,6 +18,9 @@ class RelatoriosAgent(BaseAgent):
         "historico",
         "baixo",
         "baixos",
+        "fechamento",
+        "fechar",
+        "resumo",
     }
 
     def __init__(
@@ -24,11 +28,13 @@ class RelatoriosAgent(BaseAgent):
         estoque_repository: EstoqueRepository | None = None,
         vendas_repository: VendasRepository | None = None,
         pedidos_repository: PedidosRepository | None = None,
+        contas_repository: ContasRepository | None = None,
     ) -> None:
         super().__init__(nome="relatorios")
         self.estoque_repository = estoque_repository or EstoqueRepository()
         self.vendas_repository = vendas_repository or VendasRepository()
         self.pedidos_repository = pedidos_repository or PedidosRepository()
+        self.contas_repository = contas_repository or ContasRepository()
 
     def pode_processar(
         self,
@@ -81,6 +87,7 @@ class RelatoriosAgent(BaseAgent):
             "relatorios_compras_pendentes": "Compras pendentes.",
             "relatorios_valor_receber": "Valor a receber dos pedidos.",
             "relatorios_lucro": "Lucro dos pedidos.",
+            "relatorios_fechamento_dia": "Fechamento do dia calculado.",
         }
         return resumos.get(intencao, "Relatorio solicitado.")
 
@@ -94,6 +101,7 @@ class RelatoriosAgent(BaseAgent):
             "relatorios_compras_pendentes": "listar_compras_pendentes",
             "relatorios_valor_receber": "calcular_valor_a_receber",
             "relatorios_lucro": "calcular_lucro",
+            "relatorios_fechamento_dia": "calcular_fechamento_dia",
         }
         return acoes.get(intencao, "analisar_relatorio")
 
@@ -137,6 +145,10 @@ class RelatoriosAgent(BaseAgent):
                 "somar pedidos com custo conhecido",
                 "retornar lucro conhecido",
             ],
+            "relatorios_fechamento_dia": [
+                "somar movimentacoes do dia",
+                "mostrar pendencias atuais",
+            ],
         }
         return proximas.get(intencao, ["identificar relatorio"])
 
@@ -147,6 +159,9 @@ class RelatoriosAgent(BaseAgent):
         atributos: dict[str, Any],
         limite: float,
     ) -> dict[str, Any] | None:
+        if intencao == "relatorios_fechamento_dia":
+            return self._fechamento_dia()
+
         if intencao == "relatorios_vendas_hoje":
             return self.vendas_repository.resumo_hoje()
 
@@ -196,6 +211,32 @@ class RelatoriosAgent(BaseAgent):
             return self.pedidos_repository.resumo_financeiro()
 
         return None
+
+    def _fechamento_dia(self) -> dict[str, Any]:
+        compras_pendentes = self._enriquecer_pedidos(
+            self.pedidos_repository.listar_compras_pendentes()
+        )
+        para_cobrar = self._enriquecer_pedidos(
+            self.pedidos_repository.listar_pedidos_para_cobrar()
+        )
+        para_entregar = self._enriquecer_pedidos(
+            self.pedidos_repository.listar_pedidos_para_entregar()
+        )
+
+        return {
+            "tipo_relatorio": "fechamento_dia",
+            "periodo": "hoje",
+            "pedidos": self.pedidos_repository.resumo_hoje(),
+            "caixa": self.contas_repository.resumo_caixa_hoje(),
+            "despesas": self.contas_repository.resumo_despesas_hoje(),
+            "vendas": self.vendas_repository.resumo_hoje(),
+            "financeiro": self.pedidos_repository.resumo_financeiro(),
+            "pendencias": {
+                "compras_pendentes": len(compras_pendentes),
+                "para_cobrar": len(para_cobrar),
+                "para_entregar": len(para_entregar),
+            },
+        }
 
     def _limite_estoque_baixo(self, analise: dict[str, Any] | None) -> float:
         numero = self.primeiro_numero(analise)

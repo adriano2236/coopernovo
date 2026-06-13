@@ -100,6 +100,7 @@ def criar_cooper() -> Cooper:
                 estoque_repository=estoque_repository,
                 vendas_repository=vendas_repository,
                 pedidos_repository=pedidos_repository,
+                contas_repository=contas_repository,
             ),
             PrecificacaoAgent(),
             VendasAgent(
@@ -139,6 +140,9 @@ def exibir_exemplos() -> None:
     print("  entrada de 4 produto camiseta preta g")
     print("  inventario estoque")
     print("  quanto vendi hoje?")
+    print("  fechamento do dia")
+    print("  resumo do dia")
+    print("  como foi hoje?")
     print("  produtos com estoque baixo")
     print("  historico da camiseta preta m")
     print("  cadastre cliente Maria telefone 11999999999")

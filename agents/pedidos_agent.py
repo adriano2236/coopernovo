@@ -267,13 +267,23 @@ class PedidosAgent(BaseAgent):
             return self._registrar_pagamento_pedido(pedido, valor)
 
         if intencao == "pedidos_entregar" and (pedido_id or cliente or produto):
-            pedido = self._buscar_pedido_para_acao(pedido_id, cliente, produto)
+            pedido = self._buscar_pedido_para_acao(
+                pedido_id,
+                cliente,
+                produto,
+                permitir_concluido=True,
+            )
             if pedido is None:
                 return self._pedido_nao_encontrado(pedido_id, cliente, produto)
             return self._registrar_entrega_pedido(pedido)
 
         if intencao == "pedidos_concluir" and (pedido_id or cliente or produto):
-            pedido = self._buscar_pedido_para_acao(pedido_id, cliente, produto)
+            pedido = self._buscar_pedido_para_acao(
+                pedido_id,
+                cliente,
+                produto,
+                permitir_concluido=True,
+            )
             if pedido is None:
                 return self._pedido_nao_encontrado(pedido_id, cliente, produto)
 
@@ -305,12 +315,15 @@ class PedidosAgent(BaseAgent):
         pedido_id: int | None,
         cliente: str | None,
         produto: str | None,
+        permitir_concluido: bool = False,
     ) -> dict[str, Any] | None:
         if pedido_id is not None:
             pedido = self.repository.buscar_por_id(pedido_id)
             if not pedido:
                 return None
-            if pedido.get("status") in {"cancelado", "concluido"}:
+            if pedido.get("status") == "cancelado":
+                return None
+            if pedido.get("status") == "concluido" and not permitir_concluido:
                 return None
             return pedido
 
@@ -525,6 +538,10 @@ class PedidosAgent(BaseAgent):
         pedido: dict[str, Any],
         valor_informado: float | None,
     ) -> dict[str, Any] | None:
+        pedido = self._enriquecer_pedido(pedido) or pedido
+        if pedido.get("status") == "concluido":
+            return pedido
+
         valor_final = self._valor_final_para_conclusao(pedido, valor_informado)
         if valor_final is not None and valor_final > 0:
             pedido = self._registrar_pagamento_pedido(pedido, valor_final) or pedido
@@ -582,6 +599,9 @@ class PedidosAgent(BaseAgent):
         pedido: dict[str, Any],
     ) -> dict[str, Any] | None:
         pedido = self._enriquecer_pedido(pedido) or pedido
+        if pedido.get("status") == "concluido":
+            return pedido
+
         status = self._status_apos_entrega(pedido)
         atualizado = self.repository.atualizar_entrega(
             pedido_id=int(pedido["pedido_id"]),
@@ -675,6 +695,9 @@ class PedidosAgent(BaseAgent):
             "pedidos_historico",
         }:
             return produto
+
+        if entidades.get("pedido_id") and not entidades.get("categorias_roupa"):
+            return None
 
         if not cliente:
             return produto

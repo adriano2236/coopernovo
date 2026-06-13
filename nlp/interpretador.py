@@ -72,10 +72,14 @@ class Interpretador:
     TERMOS_RELATORIOS = {
         "baixo",
         "baixos",
+        "dia",
+        "fechamento",
+        "fechar",
         "historico",
         "hoje",
         "relatorio",
         "relatorios",
+        "resumo",
     }
 
     TERMOS_BUSCA = {
@@ -771,6 +775,15 @@ class Interpretador:
         tokens: set[str],
         entidades: dict[str, Any],
     ) -> bool:
+        if tokens & {"fechamento", "fechar"}:
+            return True
+
+        if tokens & {"resumo"} and tokens & {"dia", "hoje", "loja"}:
+            return True
+
+        if "hoje" in tokens and tokens & {"como", "foi"}:
+            return True
+
         if "historico" in tokens and tokens & {"pedido", "pedidos"}:
             return False
 
@@ -1080,6 +1093,13 @@ class Interpretador:
             return "vendas_geral"
 
         if dominio == "relatorios":
+            if (
+                conjunto & {"fechamento", "fechar"}
+                or (conjunto & {"resumo"} and conjunto & {"dia", "hoje", "loja"})
+                or ("hoje" in conjunto and conjunto & {"como", "foi"})
+            ):
+                return "relatorios_fechamento_dia"
+
             if "receber" in conjunto:
                 return "relatorios_valor_receber"
 
@@ -1242,6 +1262,7 @@ class Interpretador:
         tamanhos = self._extrair_tamanhos(tokens)
         valores = self._extrair_valores_monetarios(msg)
         quantidade = self._extrair_quantidade(tokens)
+        pedido_id = self._extrair_pedido_id(msg)
 
         atributos_roupa = {
             "categoria": categorias,
@@ -1250,7 +1271,7 @@ class Interpretador:
             "tamanho": tamanhos,
         }
         produto = self._montar_produto_roupa(atributos_roupa)
-        if produto is None:
+        if produto is None and pedido_id is None:
             produto = self._extrair_produto_generico(msg, tokens)
 
         return {
@@ -1266,7 +1287,7 @@ class Interpretador:
             "observacao_fornecedor": self._extrair_observacao_fornecedor(msg),
             "descricao_financeira": self._extrair_descricao_financeira(msg),
             "categoria_financeira": self._extrair_categoria_financeira(tokens),
-            "pedido_id": self._extrair_pedido_id(msg),
+            "pedido_id": pedido_id,
             "edicao_pedido": self._extrair_edicao_pedido(
                 tokens=tokens,
                 produto=produto,

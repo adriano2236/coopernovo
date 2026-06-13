@@ -698,6 +698,9 @@ class ResponseBuilder:
         if tipo == "vendas_periodo":
             return self._formatar_relatorio_vendas(resultado)
 
+        if tipo == "fechamento_dia":
+            return self._formatar_fechamento_dia(resultado)
+
         if tipo == "estoque_baixo":
             return self._formatar_relatorio_estoque_baixo(resultado)
 
@@ -714,6 +717,53 @@ class ResponseBuilder:
             return self._formatar_contas(resultado)
 
         return ["", f"Relatorio: {resultado}"]
+
+    def _formatar_fechamento_dia(self, resultado: dict[str, Any]) -> list[str]:
+        periodo = resultado.get("periodo") or "hoje"
+        pedidos = resultado.get("pedidos") or {}
+        caixa = resultado.get("caixa") or {}
+        despesas = resultado.get("despesas") or {}
+        vendas = resultado.get("vendas") or {}
+        financeiro = resultado.get("financeiro") or {}
+        pendencias = resultado.get("pendencias") or {}
+
+        return [
+            "",
+            f"Fechamento de {periodo}:",
+            "",
+            "Pedidos:",
+            f"- Criados: {self._formatar_numero(pedidos.get('pedidos_criados'))}",
+            f"- Comprados: {self._formatar_numero(pedidos.get('pedidos_comprados'))}",
+            f"- Entregues: {self._formatar_numero(pedidos.get('pedidos_entregues'))}",
+            f"- Pagos: {self._formatar_numero(pedidos.get('pedidos_pagos'))}",
+            f"- Concluidos: {self._formatar_numero(pedidos.get('pedidos_concluidos'))}",
+            f"- Ativos agora: {self._formatar_numero(pedidos.get('pedidos_ativos'))}",
+            "",
+            "Caixa de hoje:",
+            f"- Entradas: {self._formatar_moeda(caixa.get('caixa_entradas'))}",
+            f"- Saidas: {self._formatar_moeda(caixa.get('caixa_saidas'))}",
+            f"- Saldo do dia: {self._formatar_moeda(caixa.get('caixa_saldo'))}",
+            f"- Movimentos: {self._formatar_numero(caixa.get('total_movimentos_caixa'))}",
+            "",
+            "Despesas de hoje:",
+            f"- Total: {self._formatar_moeda(despesas.get('valor_despesas'))}",
+            f"- Quantidade: {self._formatar_numero(despesas.get('total_despesas'))}",
+            "",
+            "Vendas diretas de estoque:",
+            f"- Vendas: {self._formatar_numero(vendas.get('total_vendas'))}",
+            f"- Pecas: {self._formatar_numero(vendas.get('quantidade_itens'))}",
+            f"- Total: {self._formatar_moeda(vendas.get('valor_total'))}",
+            "",
+            "Situacao atual:",
+            f"- Valor a receber: {self._formatar_moeda(financeiro.get('valor_a_receber'))}",
+            f"- Lucro conhecido: {self._formatar_moeda(financeiro.get('lucro_conhecido'))}",
+            f"- Lucro realizado: {self._formatar_moeda(financeiro.get('lucro_realizado'))}",
+            "",
+            "Pendencias:",
+            f"- Para comprar: {self._formatar_numero(pendencias.get('compras_pendentes'))}",
+            f"- Para cobrar: {self._formatar_numero(pendencias.get('para_cobrar'))}",
+            f"- Para entregar: {self._formatar_numero(pendencias.get('para_entregar'))}",
+        ]
 
     def _formatar_relatorio_vendas(self, resultado: dict[str, Any]) -> list[str]:
         periodo = resultado.get("periodo", "periodo")

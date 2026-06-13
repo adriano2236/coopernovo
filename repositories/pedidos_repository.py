@@ -1,7 +1,7 @@
 """Persistencia SQLite para pedidos sob encomenda do Cooper."""
 
 from contextlib import contextmanager
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import json
 from pathlib import Path
 import sqlite3
@@ -508,6 +508,97 @@ class PedidosRepository:
             ORDER BY pago_em DESC, id DESC
             """
         )
+
+    def resumo_hoje(self) -> dict[str, Any]:
+        """Resume movimentacoes de pedidos registradas hoje em UTC."""
+        agora = datetime.now(timezone.utc)
+        inicio = agora.replace(hour=0, minute=0, second=0, microsecond=0)
+        fim = inicio + timedelta(days=1)
+        return self.resumo_periodo(
+            inicio=inicio.isoformat(),
+            fim=fim.isoformat(),
+            nome_periodo="hoje",
+        )
+
+    def resumo_periodo(
+        self,
+        inicio: str,
+        fim: str,
+        nome_periodo: str,
+    ) -> dict[str, Any]:
+        """Resume movimentacoes de pedidos dentro de um periodo."""
+        with self._conectar() as conexao:
+            resumo = conexao.execute(
+                """
+                SELECT
+                    COALESCE(SUM(CASE WHEN criado_em >= ? AND criado_em < ?
+                        THEN 1 ELSE 0 END), 0) AS pedidos_criados,
+                    COALESCE(SUM(CASE WHEN comprado_em >= ? AND comprado_em < ?
+                        THEN 1 ELSE 0 END), 0) AS pedidos_comprados,
+                    COALESCE(SUM(CASE WHEN entregue_em >= ? AND entregue_em < ?
+                        THEN 1 ELSE 0 END), 0) AS pedidos_entregues,
+                    COALESCE(SUM(CASE WHEN pago_em >= ? AND pago_em < ?
+                        THEN 1 ELSE 0 END), 0) AS pedidos_pagos,
+                    COALESCE(SUM(CASE WHEN status = 'concluido'
+                        AND (
+                            (pago_em >= ? AND pago_em < ?)
+                            OR (entregue_em >= ? AND entregue_em < ?)
+                        )
+                        THEN 1 ELSE 0 END), 0) AS pedidos_concluidos,
+                    COALESCE(SUM(CASE WHEN comprado_em >= ? AND comprado_em < ?
+                        THEN COALESCE(custo_compra, 0) ELSE 0 END), 0) AS custo_compras,
+                    COALESCE(SUM(CASE WHEN status = 'concluido'
+                        AND (
+                            (pago_em >= ? AND pago_em < ?)
+                            OR (entregue_em >= ? AND entregue_em < ?)
+                        )
+                        THEN COALESCE(valor_pago, preco_venda, 0) - COALESCE(custo_compra, 0)
+                        ELSE 0 END), 0) AS lucro_concluido
+                FROM pedidos
+                WHERE status != 'cancelado'
+                """,
+                (
+                    inicio,
+                    fim,
+                    inicio,
+                    fim,
+                    inicio,
+                    fim,
+                    inicio,
+                    fim,
+                    inicio,
+                    fim,
+                    inicio,
+                    fim,
+                    inicio,
+                    fim,
+                    inicio,
+                    fim,
+                    inicio,
+                    fim,
+                ),
+            ).fetchone()
+            ativos = conexao.execute(
+                """
+                SELECT COUNT(*) AS total
+                FROM pedidos
+                WHERE status NOT IN ('concluido', 'cancelado')
+                """
+            ).fetchone()
+
+        return {
+            "periodo": nome_periodo,
+            "inicio": inicio,
+            "fim": fim,
+            "pedidos_criados": resumo["pedidos_criados"],
+            "pedidos_comprados": resumo["pedidos_comprados"],
+            "pedidos_entregues": resumo["pedidos_entregues"],
+            "pedidos_pagos": resumo["pedidos_pagos"],
+            "pedidos_concluidos": resumo["pedidos_concluidos"],
+            "custo_compras": resumo["custo_compras"],
+            "lucro_concluido": resumo["lucro_concluido"],
+            "pedidos_ativos": ativos["total"],
+        }
 
     def buscar_por_termo(
         self,

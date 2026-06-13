@@ -1,7 +1,7 @@
 """Persistencia SQLite para contas a receber do Cooper."""
 
 from contextlib import contextmanager
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import sqlite3
 from typing import Any, Iterator
@@ -273,6 +273,45 @@ class ContasRepository:
             "total_movimentos_caixa": resumo["total_movimentos"],
         }
 
+    def resumo_caixa_hoje(self) -> dict[str, Any]:
+        """Resume entradas e saidas do caixa registradas hoje em UTC."""
+        inicio, fim = self._periodo_hoje()
+        return self.resumo_caixa_periodo(inicio, fim, "hoje")
+
+    def resumo_caixa_periodo(
+        self,
+        inicio: str,
+        fim: str,
+        nome_periodo: str,
+    ) -> dict[str, Any]:
+        """Resume entradas e saidas do caixa dentro de um periodo."""
+        with self._conectar() as conexao:
+            resumo = conexao.execute(
+                """
+                SELECT
+                    COALESCE(SUM(CASE WHEN tipo = 'entrada'
+                        THEN valor ELSE 0 END), 0) AS caixa_entradas,
+                    COALESCE(SUM(CASE WHEN tipo = 'saida'
+                        THEN valor ELSE 0 END), 0) AS caixa_saidas,
+                    COUNT(*) AS total_movimentos
+                FROM caixa_movimentos
+                WHERE criado_em >= ? AND criado_em < ?
+                """,
+                (inicio, fim),
+            ).fetchone()
+
+        entradas = float(resumo["caixa_entradas"] or 0)
+        saidas = float(resumo["caixa_saidas"] or 0)
+        return {
+            "periodo": nome_periodo,
+            "inicio": inicio,
+            "fim": fim,
+            "caixa_entradas": entradas,
+            "caixa_saidas": saidas,
+            "caixa_saldo": entradas - saidas,
+            "total_movimentos_caixa": resumo["total_movimentos"],
+        }
+
     def resumo_despesas(self) -> dict[str, Any]:
         """Resume despesas registradas."""
         with self._conectar() as conexao:
@@ -286,6 +325,38 @@ class ContasRepository:
             ).fetchone()
 
         return {
+            "total_despesas": resumo["total_despesas"],
+            "valor_despesas": resumo["valor_despesas"],
+        }
+
+    def resumo_despesas_hoje(self) -> dict[str, Any]:
+        """Resume despesas registradas hoje em UTC."""
+        inicio, fim = self._periodo_hoje()
+        return self.resumo_despesas_periodo(inicio, fim, "hoje")
+
+    def resumo_despesas_periodo(
+        self,
+        inicio: str,
+        fim: str,
+        nome_periodo: str,
+    ) -> dict[str, Any]:
+        """Resume despesas dentro de um periodo."""
+        with self._conectar() as conexao:
+            resumo = conexao.execute(
+                """
+                SELECT
+                    COUNT(*) AS total_despesas,
+                    COALESCE(SUM(valor), 0) AS valor_despesas
+                FROM despesas
+                WHERE criado_em >= ? AND criado_em < ?
+                """,
+                (inicio, fim),
+            ).fetchone()
+
+        return {
+            "periodo": nome_periodo,
+            "inicio": inicio,
+            "fim": fim,
             "total_despesas": resumo["total_despesas"],
             "valor_despesas": resumo["valor_despesas"],
         }
@@ -464,6 +535,12 @@ class ContasRepository:
 
     def _normalizar(self, valor: str) -> str:
         return " ".join((valor or "").strip().lower().split())
+
+    def _periodo_hoje(self) -> tuple[str, str]:
+        agora = datetime.now(timezone.utc)
+        inicio = agora.replace(hour=0, minute=0, second=0, microsecond=0)
+        fim = inicio + timedelta(days=1)
+        return inicio.isoformat(), fim.isoformat()
 
     def _agora(self) -> str:
         return datetime.now(timezone.utc).isoformat()
