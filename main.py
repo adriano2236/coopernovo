@@ -8,6 +8,7 @@ para evoluir agentes, intencoes e respostas.
 
 from agents.compras_agent import ComprasAgent
 from agents.contas_agent import ContasAgent
+from agents.agenda_agent import AgendaAgent
 from agents.backup_agent import BackupAgent
 from agents.busca_agent import BuscaAgent
 from agents.clientes_agent import ClientesAgent
@@ -68,6 +69,10 @@ def criar_cooper() -> Cooper:
     router = Router(
         agents=[
             memoria_agent,
+            AgendaAgent(
+                pedidos_repository=pedidos_repository,
+                contas_repository=contas_repository,
+            ),
             BackupAgent(
                 repository=backup_repository,
             ),
@@ -85,6 +90,7 @@ def criar_cooper() -> Cooper:
             ),
             PedidosAgent(
                 repository=pedidos_repository,
+                contas_repository=contas_repository,
             ),
             ContasAgent(
                 pedidos_repository=pedidos_repository,
@@ -159,10 +165,15 @@ def exibir_exemplos() -> None:
     print("  troca tamanho do pedido da Maria para g")
     print("  cancela pedido da Maria")
     print("  cancela pedido 1")
+    print("  cancelar #1")
     print("  historico do pedido da Maria")
     print("  historico do pedido 1")
+    print("  comprei pedido 1 por 45")
+    print("  Maria pagou 40 pelo pedido 1")
+    print("  marcar pedido 1 como entregue")
     print("  entreguei pedido da Maria")
     print("  concluir pedido da Maria")
+    print("  concluir pedido 1")
     print("  quais pedidos pendentes?")
     print("  pedidos concluidos")
     print("  quanto tenho pra receber?")
@@ -181,6 +192,9 @@ def exibir_exemplos() -> None:
     print("  aprendizados")
     print("  memoria estrategica")
     print("  historico de conversa")
+    print("  o que preciso fazer hoje?")
+    print("  agenda da loja")
+    print("  prioridades de hoje")
     print("  fazer backup")
     print("  exportar dados")
     print("  exportar planilha")

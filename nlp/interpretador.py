@@ -119,6 +119,23 @@ class Interpretador:
         "sqlite",
     }
 
+    TERMOS_AGENDA = {
+        "agenda",
+        "afazeres",
+        "acao",
+        "acoes",
+        "fazer",
+        "hoje",
+        "loja",
+        "pendencia",
+        "pendencias",
+        "preciso",
+        "prioridade",
+        "prioridades",
+        "tarefas",
+        "trabalho",
+    }
+
     TERMOS_MEMORIA = {
         "apague",
         "apagar",
@@ -322,14 +339,19 @@ class Interpretador:
         "confirmado",
         "confirmei",
         "confirmar",
+        "concluir",
         "concluido",
         "concluidos",
         "conclui",
+        "encerra",
+        "encerrar",
         "encerrado",
         "encerrados",
         "entregue",
         "entreguei",
         "entregar",
+        "finaliza",
+        "finalizar",
         "finalizado",
         "finalizados",
         "finalizei",
@@ -500,6 +522,9 @@ class Interpretador:
         if self._parece_backup(conjunto):
             return "backup"
 
+        if self._parece_agenda(conjunto):
+            return "agenda"
+
         if self._parece_busca(conjunto):
             return "busca"
 
@@ -563,6 +588,26 @@ class Interpretador:
 
         if tokens & {"copia", "copiar", "copie", "salva", "salvar", "salve"}:
             return bool(tokens & {"banco", "dados", "sqlite", "cooper"})
+
+        return False
+
+    def _parece_agenda(self, tokens: set[str]) -> bool:
+        if tokens & {"agenda", "afazeres", "prioridade", "prioridades", "tarefas"}:
+            return True
+
+        if tokens & {"pendencia", "pendencias"}:
+            return True
+
+        if tokens & {"preciso", "fazer"} and tokens & {
+            "cobrar",
+            "comprar",
+            "entregar",
+            "hoje",
+            "loja",
+            "pedido",
+            "pedidos",
+        }:
+            return True
 
         return False
 
@@ -790,6 +835,31 @@ class Interpretador:
         tokens: set[str],
         entidades: dict[str, Any],
     ) -> bool:
+        if entidades.get("pedido_id") and tokens & {
+            "cancela",
+            "cancelar",
+            "cancelei",
+            "compre",
+            "comprei",
+            "compramos",
+            "compra",
+            "confirmei",
+            "confirmar",
+            "concluir",
+            "conclui",
+            "encerra",
+            "encerrar",
+            "entregue",
+            "entreguei",
+            "entregar",
+            "finaliza",
+            "finalizar",
+            "finalizei",
+            "pedido",
+            "pago",
+        }:
+            return True
+
         if tokens & {"pagamento", "pagou", "pago", "recebi", "recebido"} and entidades.get(
             "valores_monetarios"
         ):
@@ -848,6 +918,9 @@ class Interpretador:
                 return "backup_exportar"
 
             return "backup_criar"
+
+        if dominio == "agenda":
+            return "agenda_hoje"
 
         if dominio == "busca":
             return "busca_geral"
@@ -1087,14 +1160,23 @@ class Interpretador:
                 & {
                     "concluido",
                     "concluidos",
+                    "concluir",
                     "conclui",
+                    "encerra",
+                    "encerrar",
                     "encerrado",
                     "encerrados",
+                    "finaliza",
+                    "finalizar",
                     "finalizei",
                     "finalizado",
                     "finalizados",
                 }
-            ) and (entidades.get("cliente") or entidades.get("produto")):
+            ) and (
+                entidades.get("pedido_id")
+                or entidades.get("cliente")
+                or entidades.get("produto")
+            ):
                 return "pedidos_concluir"
 
             if conjunto & {"compre", "comprei", "compramos", "compra"}:
@@ -1274,11 +1356,15 @@ class Interpretador:
 
     def _extrair_pedido_id(self, msg: str) -> str | None:
         texto = self._normalizar(msg)
+        encontrado = re.search(r"(?:^|\s)#\s*(\d+)\b", texto)
+        if encontrado:
+            return encontrado.group(1)
+
         encontrado = re.search(r"\bpedido\s*#?\s*(\d+)\b", texto)
         if encontrado:
             return encontrado.group(1)
 
-        encontrado = re.search(r"\bpedido\s+numero\s+(\d+)\b", texto)
+        encontrado = re.search(r"\bpedido\s+(?:n|numero|num)\s*\.?\s*(\d+)\b", texto)
         if encontrado:
             return encontrado.group(1)
 

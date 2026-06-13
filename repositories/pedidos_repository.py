@@ -130,6 +130,40 @@ class PedidosRepository:
         )
         return self.buscar_por_id(pedido["pedido_id"]) or pedido
 
+    def registrar_compra_por_id(
+        self,
+        pedido_id: int,
+        custo_compra: float | None = None,
+    ) -> dict[str, Any] | None:
+        """Registra compra de um pedido conhecido pelo id."""
+        pedido = self.buscar_por_id(pedido_id)
+        if pedido is None:
+            return None
+
+        agora = self._agora()
+        with self._conectar() as conexao:
+            conexao.execute(
+                """
+                UPDATE pedidos
+                SET status = ?,
+                    custo_compra = COALESCE(?, custo_compra),
+                    comprado_em = ?
+                WHERE id = ?
+                """,
+                ("comprado", custo_compra, agora, pedido_id),
+            )
+
+        self.registrar_historico(
+            pedido_id=pedido_id,
+            evento="compra_registrada",
+            descricao="Compra do pedido registrada.",
+            dados={
+                "custo_compra": custo_compra,
+                "status": "comprado",
+            },
+        )
+        return self.buscar_por_id(pedido_id)
+
     def entregar_pedido(
         self,
         cliente: str,
@@ -388,6 +422,81 @@ class PedidosRepository:
             ORDER BY id DESC
             """
         )
+
+    def listar_pedidos_para_cobrar(self, limite: int = 20) -> list[dict[str, Any]]:
+        """Lista pedidos que ja podem precisar de cobranca."""
+        with self._conectar() as conexao:
+            linhas = conexao.execute(
+                """
+                SELECT *
+                FROM pedidos
+                WHERE status NOT IN ('concluido', 'cancelado')
+                  AND preco_venda IS NOT NULL
+                  AND COALESCE(valor_pago, 0) < preco_venda
+                  AND (
+                    custo_compra IS NOT NULL
+                    OR status IN ('comprado', 'pago_parcial', 'entregue', 'pago')
+                  )
+                ORDER BY id DESC
+                LIMIT ?
+                """,
+                (limite,),
+            ).fetchall()
+
+        return [self._pedido_dict(linha) for linha in linhas]
+
+    def listar_pedidos_para_entregar(self, limite: int = 20) -> list[dict[str, Any]]:
+        """Lista pedidos comprados e ainda nao entregues."""
+        with self._conectar() as conexao:
+            linhas = conexao.execute(
+                """
+                SELECT *
+                FROM pedidos
+                WHERE status NOT IN ('concluido', 'cancelado')
+                  AND custo_compra IS NOT NULL
+                  AND entregue_em IS NULL
+                ORDER BY id DESC
+                LIMIT ?
+                """,
+                (limite,),
+            ).fetchall()
+
+        return [self._pedido_dict(linha) for linha in linhas]
+
+    def listar_pedidos_parados(
+        self,
+        dias: int = 3,
+        limite: int = 20,
+    ) -> list[dict[str, Any]]:
+        """Lista pedidos ativos sem movimentacao recente."""
+        dias = max(int(dias or 3), 1)
+        intervalo = f"-{dias} days"
+        ultimo_movimento_sql = """
+            MAX(
+                criado_em,
+                COALESCE(confirmado_em, criado_em),
+                COALESCE(comprado_em, criado_em),
+                COALESCE(entregue_em, criado_em),
+                COALESCE(pago_em, criado_em)
+            )
+        """
+
+        with self._conectar() as conexao:
+            linhas = conexao.execute(
+                f"""
+                SELECT
+                    *,
+                    {ultimo_movimento_sql} AS ultimo_movimento_em
+                FROM pedidos
+                WHERE status NOT IN ('concluido', 'cancelado')
+                  AND datetime({ultimo_movimento_sql}) <= datetime('now', ?)
+                ORDER BY datetime(ultimo_movimento_em) ASC, id ASC
+                LIMIT ?
+                """,
+                (intervalo, limite),
+            ).fetchall()
+
+        return [self._pedido_dict(linha) for linha in linhas]
 
     def listar_pedidos_concluidos(self) -> list[dict[str, Any]]:
         """Lista pedidos vendidos, pagos e encerrados."""
@@ -735,8 +844,7 @@ class PedidosRepository:
         preco = linha["preco_venda"]
         custo = linha["custo_compra"]
         valor_pago = linha["valor_pago"]
-
-        return {
+        pedido = {
             "tipo_resultado": "pedido",
             "pedido_id": linha["id"],
             "cliente": linha["cliente"],
@@ -757,6 +865,10 @@ class PedidosRepository:
             "pago_em": linha["pago_em"],
             "cancelado_em": linha["cancelado_em"],
         }
+        if "ultimo_movimento_em" in linha.keys():
+            pedido["ultimo_movimento_em"] = linha["ultimo_movimento_em"]
+
+        return pedido
 
     def _historico_dict(self, linha: sqlite3.Row) -> dict[str, Any]:
         return {

@@ -78,6 +78,12 @@ class ResponseBuilder:
         ).startswith("memoria"):
             return self._formatar_memoria(resultado)
 
+        if (
+            isinstance(resultado, dict)
+            and resultado.get("tipo_resultado") == "agenda_operacional"
+        ):
+            return self._formatar_agenda(resultado)
+
         if isinstance(resultado, dict) and str(
             resultado.get("tipo_resultado", "")
         ).startswith(("backup", "exportacao")):
@@ -175,6 +181,102 @@ class ResponseBuilder:
             return linhas
 
         return ["", f"Memoria: {resultado}"]
+
+    def _formatar_agenda(self, resultado: dict[str, Any]) -> list[str]:
+        total = int(resultado.get("total_acoes") or 0)
+        dias_parado = self._formatar_numero(resultado.get("dias_parado"))
+        linhas = [
+            "",
+            "Agenda da loja:",
+            f"- Acoes encontradas: {self._formatar_numero(total)}",
+            f"- Pedido parado: sem movimento ha {dias_parado} dias ou mais",
+        ]
+
+        if total <= 0:
+            linhas.append("")
+            linhas.append("Agenda limpa por enquanto.")
+            return linhas
+
+        self._adicionar_secao_pedidos(
+            linhas=linhas,
+            titulo="Para comprar:",
+            pedidos=resultado.get("para_comprar") or [],
+            vazio="Nenhuma compra pendente.",
+        )
+        self._adicionar_secao_pedidos(
+            linhas=linhas,
+            titulo="Para cobrar:",
+            pedidos=resultado.get("para_cobrar") or [],
+            vazio="Nenhuma cobranca pendente.",
+        )
+        self._adicionar_secao_pedidos(
+            linhas=linhas,
+            titulo="Para entregar:",
+            pedidos=resultado.get("para_entregar") or [],
+            vazio="Nenhuma entrega pendente.",
+        )
+        self._adicionar_secao_pedidos(
+            linhas=linhas,
+            titulo="Pedidos parados:",
+            pedidos=resultado.get("pedidos_parados") or [],
+            vazio="Nenhum pedido parado.",
+            incluir_ultimo_movimento=True,
+        )
+        self._adicionar_secao_contas(
+            linhas=linhas,
+            contas=resultado.get("contas_abertas") or [],
+        )
+
+        return linhas
+
+    def _adicionar_secao_pedidos(
+        self,
+        linhas: list[str],
+        titulo: str,
+        pedidos: list[dict[str, Any]],
+        vazio: str,
+        incluir_ultimo_movimento: bool = False,
+    ) -> None:
+        linhas.append("")
+        linhas.append(titulo)
+        if not pedidos:
+            linhas.append(f"- {vazio}")
+            return
+
+        for pedido in pedidos[:10]:
+            linha = f"- {self._resumo_pedido(pedido)}"
+            if incluir_ultimo_movimento and pedido.get("ultimo_movimento_em"):
+                linha += (
+                    " | ultimo movimento "
+                    f"{self._formatar_data_curta(pedido.get('ultimo_movimento_em'))}"
+                )
+            linhas.append(linha)
+
+        if len(pedidos) > 10:
+            linhas.append(f"- ... mais {len(pedidos) - 10} pedidos")
+
+    def _adicionar_secao_contas(
+        self,
+        linhas: list[str],
+        contas: list[dict[str, Any]],
+    ) -> None:
+        linhas.append("")
+        linhas.append("Contas avulsas em aberto:")
+        if not contas:
+            linhas.append("- Nenhuma conta avulsa em aberto.")
+            return
+
+        for conta in contas[:10]:
+            linha = (
+                f"- #{conta.get('conta_id')} | "
+                f"{conta.get('cliente')} | "
+                f"{conta.get('descricao')} | "
+                f"falta {self._formatar_moeda(conta.get('valor_restante'))}"
+            )
+            linhas.append(linha)
+
+        if len(contas) > 10:
+            linhas.append(f"- ... mais {len(contas) - 10} contas")
 
     def _formatar_backup_exportacao(self, resultado: dict[str, Any]) -> list[str]:
         tipo = resultado.get("tipo_resultado")

@@ -273,7 +273,11 @@ class ContasAgent(BaseAgent):
                 produto=produto,
             )
 
-        if pedido and pedido.get("preco_venda") is not None:
+        if pedido and (
+            pedido.get("preco_venda") is not None
+            or pedido_id is not None
+            or produto is not None
+        ):
             return self._registrar_pagamento_pedido(pedido, valor)
 
         if not cliente:
@@ -297,7 +301,7 @@ class ContasAgent(BaseAgent):
         pedido: dict[str, Any],
         valor: float,
     ) -> dict[str, Any]:
-        preco_venda = float(pedido.get("preco_venda") or 0)
+        preco_venda = float(pedido.get("preco_venda") or valor)
         valor_pago_total = float(pedido.get("valor_pago") or 0) + float(valor)
         entregue = bool(pedido.get("entregue_em")) or pedido.get("status") == "entregue"
         if valor_pago_total >= preco_venda:

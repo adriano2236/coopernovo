@@ -4,6 +4,7 @@ from typing import Any
 
 from agents.base_agent import BaseAgent
 from agents.precificacao_agent import PrecificacaoAgent
+from repositories.contas_repository import ContasRepository
 from repositories.pedidos_repository import PedidosRepository
 
 
@@ -36,9 +37,14 @@ class PedidosAgent(BaseAgent):
         "recebido",
     }
 
-    def __init__(self, repository: PedidosRepository | None = None) -> None:
+    def __init__(
+        self,
+        repository: PedidosRepository | None = None,
+        contas_repository: ContasRepository | None = None,
+    ) -> None:
         super().__init__(nome="pedidos")
         self.repository = repository or PedidosRepository()
+        self.contas_repository = contas_repository
         self.precificacao_agent = PrecificacaoAgent()
 
     def pode_processar(
@@ -231,6 +237,16 @@ class PedidosAgent(BaseAgent):
         if intencao == "pedidos_confirmar" and cliente:
             pedido = self.repository.confirmar_pedido(cliente=cliente, produto=produto)
             return self._enriquecer_pedido(pedido)
+
+        if intencao == "pedidos_registrar_compra" and pedido_id:
+            pedido = self._buscar_pedido_para_acao(pedido_id, cliente, produto)
+            if pedido is None:
+                return self._pedido_nao_encontrado(pedido_id, cliente, produto)
+            comprado = self.repository.registrar_compra_por_id(
+                pedido_id=int(pedido["pedido_id"]),
+                custo_compra=valor,
+            )
+            return self._com_sugestao_de_preco(comprado or pedido, valor)
 
         if intencao == "pedidos_registrar_compra" and (cliente or produto):
             pedido = self.repository.registrar_compra(
@@ -542,7 +558,24 @@ class PedidosAgent(BaseAgent):
             valor_pago_total=valor_pago_total,
             status=status,
         )
+        self._registrar_entrada_caixa_pedido(pedido=pedido, valor=valor_pago)
         return self._enriquecer_pedido(atualizado)
+
+    def _registrar_entrada_caixa_pedido(
+        self,
+        pedido: dict[str, Any],
+        valor: float,
+    ) -> None:
+        contas_repository = self.contas_repository or ContasRepository(
+            self.repository.db_path
+        )
+        contas_repository.registrar_movimento_caixa(
+            tipo="entrada",
+            valor=valor,
+            descricao=f"pagamento pedido #{pedido.get('pedido_id')}",
+            origem="pedido",
+            referencia_id=int(pedido["pedido_id"]),
+        )
 
     def _registrar_entrega_pedido(
         self,
