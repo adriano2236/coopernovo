@@ -77,6 +77,9 @@ class AgendaAgent(BaseAgent):
         return acoes.get(intencao, "analisar_agenda")
 
     def _montar_agenda(self, dias_parado: int) -> dict[str, Any]:
+        para_procurar = self._enriquecer_pedidos(
+            self.pedidos_repository.listar_pedidos_para_procurar()
+        )
         para_comprar = self._enriquecer_pedidos(
             self.pedidos_repository.listar_compras_pendentes()
         )
@@ -93,6 +96,7 @@ class AgendaAgent(BaseAgent):
         total_acoes = sum(
             len(itens)
             for itens in (
+                para_procurar,
                 para_comprar,
                 para_cobrar,
                 para_entregar,
@@ -106,6 +110,7 @@ class AgendaAgent(BaseAgent):
             "periodo": "hoje",
             "dias_parado": dias_parado,
             "total_acoes": total_acoes,
+            "para_procurar": para_procurar,
             "para_comprar": para_comprar,
             "para_cobrar": para_cobrar,
             "para_entregar": para_entregar,

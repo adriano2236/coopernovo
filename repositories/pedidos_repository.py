@@ -23,6 +23,7 @@ class PedidosRepository:
         quantidade: float = 1,
         preco_venda: float | None = None,
         atributos: dict[str, Any] | None = None,
+        status: str = "solicitado",
     ) -> dict[str, Any]:
         """Cria um pedido solicitado pelo cliente."""
         agora = self._agora()
@@ -61,7 +62,7 @@ class PedidosRepository:
                     tamanho,
                     quantidade,
                     preco_venda,
-                    "solicitado",
+                    status,
                     agora,
                 ),
             )
@@ -77,10 +78,73 @@ class PedidosRepository:
                 "produto": produto.strip(),
                 "quantidade": quantidade,
                 "preco_venda": preco_venda,
-                "status": "solicitado",
+                "status": status,
             },
         )
         return pedido or {"pedido_id": cursor.lastrowid}
+
+    def registrar_produto_nao_encontrado(
+        self,
+        pedido_id: int,
+    ) -> dict[str, Any] | None:
+        """Registra que a peca ainda nao foi encontrada."""
+        pedido = self.buscar_por_id(pedido_id)
+        if pedido is None:
+            return None
+
+        agora = self._agora()
+        with self._conectar() as conexao:
+            conexao.execute(
+                """
+                UPDATE pedidos
+                SET status = ?,
+                    nao_encontrado_em = ?
+                WHERE id = ?
+                """,
+                ("procurando", agora, pedido_id),
+            )
+
+        self.registrar_historico(
+            pedido_id=pedido_id,
+            evento="produto_nao_encontrado",
+            descricao="Produto ainda nao encontrado.",
+            dados={
+                "status": "procurando",
+            },
+        )
+        return self.buscar_por_id(pedido_id)
+
+    def registrar_produto_encontrado(
+        self,
+        pedido_id: int,
+    ) -> dict[str, Any] | None:
+        """Registra que a peca foi encontrada e pode seguir para compra."""
+        pedido = self.buscar_por_id(pedido_id)
+        if pedido is None:
+            return None
+
+        agora = self._agora()
+        with self._conectar() as conexao:
+            conexao.execute(
+                """
+                UPDATE pedidos
+                SET status = ?,
+                    encontrado_em = ?,
+                    confirmado_em = COALESCE(confirmado_em, ?)
+                WHERE id = ?
+                """,
+                ("encontrado", agora, agora, pedido_id),
+            )
+
+        self.registrar_historico(
+            pedido_id=pedido_id,
+            evento="produto_encontrado",
+            descricao="Produto encontrado para o cliente.",
+            dados={
+                "status": "encontrado",
+            },
+        )
+        return self.buscar_por_id(pedido_id)
 
     def confirmar_pedido(
         self,
@@ -418,10 +482,26 @@ class PedidosRepository:
             """
             SELECT *
             FROM pedidos
-            WHERE status IN ('solicitado', 'confirmado')
+            WHERE status IN ('solicitado', 'confirmado', 'encontrado')
             ORDER BY id DESC
             """
         )
+
+    def listar_pedidos_para_procurar(self, limite: int = 20) -> list[dict[str, Any]]:
+        """Lista pedidos que ainda precisam ser procurados."""
+        with self._conectar() as conexao:
+            linhas = conexao.execute(
+                """
+                SELECT *
+                FROM pedidos
+                WHERE status = 'procurando'
+                ORDER BY id DESC
+                LIMIT ?
+                """,
+                (limite,),
+            ).fetchall()
+
+        return [self._pedido_dict(linha) for linha in linhas]
 
     def listar_pedidos_para_cobrar(self, limite: int = 20) -> list[dict[str, Any]]:
         """Lista pedidos que ja podem precisar de cobranca."""
@@ -475,6 +555,8 @@ class PedidosRepository:
             MAX(
                 criado_em,
                 COALESCE(confirmado_em, criado_em),
+                COALESCE(encontrado_em, criado_em),
+                COALESCE(nao_encontrado_em, criado_em),
                 COALESCE(comprado_em, criado_em),
                 COALESCE(entregue_em, criado_em),
                 COALESCE(pago_em, criado_em)
@@ -904,6 +986,8 @@ class PedidosRepository:
             self._garantir_coluna(conexao, "pedidos", "valor_pago", "REAL")
             self._garantir_coluna(conexao, "pedidos", "pago_em", "TEXT")
             self._garantir_coluna(conexao, "pedidos", "cancelado_em", "TEXT")
+            self._garantir_coluna(conexao, "pedidos", "encontrado_em", "TEXT")
+            self._garantir_coluna(conexao, "pedidos", "nao_encontrado_em", "TEXT")
             conexao.execute(
                 """
                 CREATE TABLE IF NOT EXISTS pedido_historico (
@@ -955,6 +1039,8 @@ class PedidosRepository:
             "entregue_em": linha["entregue_em"],
             "pago_em": linha["pago_em"],
             "cancelado_em": linha["cancelado_em"],
+            "encontrado_em": linha["encontrado_em"],
+            "nao_encontrado_em": linha["nao_encontrado_em"],
         }
         if "ultimo_movimento_em" in linha.keys():
             pedido["ultimo_movimento_em"] = linha["ultimo_movimento_em"]

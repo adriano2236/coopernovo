@@ -199,6 +199,12 @@ class ResponseBuilder:
 
         self._adicionar_secao_pedidos(
             linhas=linhas,
+            titulo="Para procurar:",
+            pedidos=resultado.get("para_procurar") or [],
+            vazio="Nenhuma procura pendente.",
+        )
+        self._adicionar_secao_pedidos(
+            linhas=linhas,
             titulo="Para comprar:",
             pedidos=resultado.get("para_comprar") or [],
             vazio="Nenhuma compra pendente.",
@@ -1023,7 +1029,7 @@ class ResponseBuilder:
         if valor_pago is not None:
             linhas.append(f"Valor pago: {self._formatar_moeda(valor_pago)}")
 
-        if valor_restante is not None and status != "cancelado":
+        if valor_restante is not None and self._pedido_tem_cobranca_ativa(resultado):
             linhas.append(f"Falta pagar: {self._formatar_moeda(valor_restante)}")
 
         if lucro is not None and status != "cancelado":
@@ -1096,8 +1102,22 @@ class ResponseBuilder:
         if valor_pago is not None:
             partes.append(f"pago {self._formatar_moeda(valor_pago)}")
         if valor_restante:
-            partes.append(f"falta {self._formatar_moeda(valor_restante)}")
+            if self._pedido_tem_cobranca_ativa(pedido):
+                partes.append(f"falta {self._formatar_moeda(valor_restante)}")
         return " | ".join(partes)
+
+    def _pedido_tem_cobranca_ativa(self, pedido: dict[str, Any]) -> bool:
+        status = str(pedido.get("status") or "")
+        if status in {
+            "cancelado",
+            "confirmado",
+            "encontrado",
+            "procurando",
+            "solicitado",
+        }:
+            return False
+
+        return pedido.get("preco_venda") is not None
 
     def _formatar_inventario(self, itens: list[dict[str, Any]]) -> list[str]:
         if not itens:
@@ -1152,6 +1172,7 @@ class ResponseBuilder:
 
     def _formatar_etapa_pedido(self, etapa: str) -> str:
         etapas = {
+            "procurar_peca": "procurar a peca",
             "comprar_peca": "comprar a peca",
             "definir_preco_de_venda": "definir preco de venda",
             "receber_pagamento": "receber pagamento",

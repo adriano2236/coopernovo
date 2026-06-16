@@ -33,6 +33,11 @@ class PedidosAgent(BaseAgent):
         "pagamento",
         "pagou",
         "pago",
+        "achei",
+        "encontrei",
+        "procura",
+        "procurar",
+        "procurando",
         "recebi",
         "recebido",
     }
@@ -114,6 +119,9 @@ class PedidosAgent(BaseAgent):
 
     def _resumo(self, intencao: str) -> str:
         resumos = {
+            "pedidos_procurar": "Procura de produto registrada na agenda.",
+            "pedidos_nao_encontrado": "Procura atualizada: produto ainda nao encontrado.",
+            "pedidos_encontrado": "Produto encontrado para o pedido.",
             "pedidos_criar": "Pedido sob encomenda registrado.",
             "pedidos_confirmar": "Confirmacao de pedido registrada.",
             "pedidos_registrar_compra": "Compra do pedido registrada.",
@@ -128,6 +136,9 @@ class PedidosAgent(BaseAgent):
 
     def _acao(self, intencao: str) -> str:
         acoes = {
+            "pedidos_procurar": "registrar_procura_pedido",
+            "pedidos_nao_encontrado": "registrar_produto_nao_encontrado",
+            "pedidos_encontrado": "registrar_produto_encontrado",
             "pedidos_criar": "criar_pedido",
             "pedidos_confirmar": "confirmar_pedido",
             "pedidos_registrar_compra": "registrar_compra_pedido",
@@ -159,11 +170,14 @@ class PedidosAgent(BaseAgent):
             "pedidos_editar",
             "pedidos_cancelar",
             "pedidos_historico",
+            "pedidos_nao_encontrado",
+            "pedidos_encontrado",
         }:
             campos.append("cliente")
 
         if intencao in {
             "pedidos_criar",
+            "pedidos_procurar",
         } and produto is None:
             campos.append("produto")
 
@@ -176,6 +190,8 @@ class PedidosAgent(BaseAgent):
             "pedidos_editar",
             "pedidos_cancelar",
             "pedidos_historico",
+            "pedidos_nao_encontrado",
+            "pedidos_encontrado",
         } and pedido_id is None and cliente is None and produto is None:
             campos.append("pedido_cliente_ou_produto")
 
@@ -195,6 +211,9 @@ class PedidosAgent(BaseAgent):
 
     def _proximas_acoes(self, intencao: str) -> list[str]:
         proximas = {
+            "pedidos_procurar": ["procurar peca", "avisar cliente quando encontrar"],
+            "pedidos_nao_encontrado": ["continuar procurando", "avisar cliente"],
+            "pedidos_encontrado": ["comprar peca", "combinar entrega"],
             "pedidos_criar": ["confirmar interesse", "comprar peca", "entregar"],
             "pedidos_confirmar": ["comprar peca", "registrar custo"],
             "pedidos_registrar_compra": ["definir preco", "receber pagamento"],
@@ -223,6 +242,37 @@ class PedidosAgent(BaseAgent):
             if pedido is None:
                 return self._pedido_nao_encontrado(pedido_id, cliente, produto)
             return self._historico_pedido(pedido)
+
+        if intencao == "pedidos_procurar" and cliente and produto:
+            pedido = self.repository.criar_pedido(
+                cliente=cliente,
+                produto=produto,
+                quantidade=quantidade,
+                preco_venda=valor,
+                atributos=atributos,
+                status="procurando",
+            )
+            return self._enriquecer_pedido(pedido)
+
+        if intencao == "pedidos_nao_encontrado" and (
+            pedido_id or cliente or produto
+        ):
+            pedido = self._buscar_pedido_para_acao(pedido_id, cliente, produto)
+            if pedido is None:
+                return self._pedido_nao_encontrado(pedido_id, cliente, produto)
+            atualizado = self.repository.registrar_produto_nao_encontrado(
+                pedido_id=int(pedido["pedido_id"]),
+            )
+            return self._enriquecer_pedido(atualizado)
+
+        if intencao == "pedidos_encontrado" and (pedido_id or cliente or produto):
+            pedido = self._buscar_pedido_para_acao(pedido_id, cliente, produto)
+            if pedido is None:
+                return self._pedido_nao_encontrado(pedido_id, cliente, produto)
+            atualizado = self.repository.registrar_produto_encontrado(
+                pedido_id=int(pedido["pedido_id"]),
+            )
+            return self._enriquecer_pedido(atualizado)
 
         if intencao == "pedidos_criar" and cliente and produto:
             pedido = self.repository.criar_pedido(
@@ -663,6 +713,12 @@ class PedidosAgent(BaseAgent):
 
         if pedido.get("status") == "concluido":
             return "pedido_concluido"
+
+        if pedido.get("status") == "procurando":
+            return "procurar_peca"
+
+        if pedido.get("status") == "encontrado":
+            return "comprar_peca"
 
         if pedido.get("custo_compra") is None:
             return "comprar_peca"

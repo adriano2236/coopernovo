@@ -328,10 +328,14 @@ class Interpretador:
         "cancelado",
         "cancelar",
         "cancelei",
+        "achar",
+        "achei",
         "encomenda",
         "encomendado",
         "encomendou",
         "encomendar",
+        "encontrar",
+        "encontrei",
         "corrige",
         "corrigir",
         "desistiu",
@@ -365,11 +369,17 @@ class Interpretador:
         "pagou",
         "pago",
         "pagos",
+        "procura",
+        "procurar",
+        "procurando",
+        "procure",
         "recebi",
         "recebido",
         "troca",
         "trocar",
         "tempo",
+        "ver",
+        "veja",
         "muda",
         "mudar",
     }
@@ -456,6 +466,9 @@ class Interpretador:
         "cuecas": "cueca",
         "jaqueta": "jaqueta",
         "jaquetas": "jaqueta",
+        "moletom": "moletom",
+        "moleton": "moletom",
+        "moletons": "moletom",
         "saia": "saia",
         "saias": "saia",
         "short": "short",
@@ -470,6 +483,10 @@ class Interpretador:
         "duplas": "duplo",
         "duplo": "duplo",
         "duplos": "duplo",
+        "bonita": "bonito",
+        "bonitas": "bonito",
+        "bonito": "bonito",
+        "bonitos": "bonito",
         "fio": "fio",
         "fios": "fio",
         "renda": "renda",
@@ -529,7 +546,7 @@ class Interpretador:
         if self._parece_agenda(conjunto):
             return "agenda"
 
-        if self._parece_busca(conjunto):
+        if self._parece_busca(conjunto, entidades):
             return "busca"
 
         if self._parece_fornecedor(conjunto, entidades):
@@ -615,12 +632,20 @@ class Interpretador:
 
         return False
 
-    def _parece_busca(self, tokens: set[str]) -> bool:
+    def _parece_busca(
+        self,
+        tokens: set[str],
+        entidades: dict[str, Any],
+    ) -> bool:
         if not tokens & self.TERMOS_BUSCA:
             return False
 
         if tokens & {"historico", "linha"} and tokens & {"pedido", "pedidos"}:
             return False
+
+        if tokens & {"achar", "ache", "procura", "procurar", "procure"}:
+            if entidades.get("cliente") and entidades.get("produto"):
+                return False
 
         return True
 
@@ -868,6 +893,8 @@ class Interpretador:
             "finaliza",
             "finalizar",
             "finalizei",
+            "achei",
+            "encontrei",
             "pedido",
             "pago",
         }:
@@ -879,6 +906,20 @@ class Interpretador:
             return False
 
         if tokens & self.TERMOS_PEDIDOS:
+            return True
+
+        if tokens & {
+            "achar",
+            "achei",
+            "encontrar",
+            "encontrei",
+            "procura",
+            "procurar",
+            "procurando",
+            "procure",
+            "ver",
+            "veja",
+        } and entidades.get("cliente") and entidades.get("produto"):
             return True
 
         if tokens & self.VERBOS_VENDA and entidades.get("cliente"):
@@ -1144,6 +1185,26 @@ class Interpretador:
             ):
                 return "pedidos_historico"
 
+            if conjunto & {"nao", "ainda"} and conjunto & {
+                "achei",
+                "encontrei",
+            }:
+                return "pedidos_nao_encontrado"
+
+            if conjunto & {"achei", "encontrei"}:
+                return "pedidos_encontrado"
+
+            if conjunto & {
+                "achar",
+                "procura",
+                "procurar",
+                "procurando",
+                "procure",
+                "ver",
+                "veja",
+            }:
+                return "pedidos_procurar"
+
             if conjunto & {
                 "cancela",
                 "cancelado",
@@ -1363,7 +1424,7 @@ class Interpretador:
         valores = re.findall(r"R\$\s*\d+(?:[.,]\d+)?", texto, flags=re.IGNORECASE)
         valores.extend(
             re.findall(
-                r"\b(?:por|para|valor(?: de)?|no valor de|preco(?: de)?|custo(?: de)?|despesa(?: com| de)?|entrada(?: de)?|gastei|gasto(?: com| de)?|pagamento(?: de)?|paguei|deve|devendo|pagou|pago|recebi|recebido|retirei|saida(?: de)?|saiu|entrou|coloquei|tirei)\s*(?:r\$\s*)?(\d+(?:[.,]\d+)?)",
+                r"\b(?:por|para|valor(?: de)?|no valor de|preco(?: de)?|custo(?: de)?|custa|custar|custou|costar|costou|despesa(?: com| de)?|entrada(?: de)?|gastei|gasto(?: com| de)?|pagamento(?: de)?|paguei|deve|devendo|pagou|pago|recebi|recebido|retirei|saida(?: de)?|saiu|entrou|coloquei|tirei)\s*(?:uns?\s*)?(?:r\$\s*)?(\d+(?:[.,]\d+)?)",
                 self._normalizar(texto),
             )
         )
@@ -1466,7 +1527,18 @@ class Interpretador:
             if self._cliente_valido(cliente):
                 return cliente.capitalize()
 
+        procura = re.search(
+            r"^\s*(\w+)\s+(?:quer|queria|pediu)\b.*\b(?:ver|veja|procurar|procura|achar|ache|olhar)\b",
+            texto,
+            flags=re.IGNORECASE,
+        )
+        if procura:
+            cliente = procura.group(1).strip()
+            if self._cliente_valido(cliente):
+                return cliente.capitalize()
+
         padroes = [
+            r"\b(?:moletom|moleton)\s+(?:da|do|de)\s+(\w+)",
             r"\b(?:cadastrar|cadastre|cadastro)\s+(?:cliente\s+)?(\w+)",
             r"\b(?:telefone|telefones|whatsapp|zap|celular|contato|dados|endereco|enderecos|cadastro)\s+(?:da|do|de)\s+(\w+)",
             r"\b(?:anota|anote|anotar|observacao|obs)\s+(?:no\s+)?(?:cliente\s+)?(\w+)",
