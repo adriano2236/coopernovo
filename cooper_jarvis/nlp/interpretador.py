@@ -39,6 +39,9 @@ class Interpretador:
         if any(termo in texto for termo in termos_historico):
             return "historico_consultar"
 
+        if self._extrair_acao_agenda(texto):
+            return self._extrair_acao_agenda(texto) or "agenda_listar_tarefas"
+
         if self._extrair_acao_arquivos(texto):
             return "arquivos_executar"
 
@@ -114,7 +117,46 @@ class Interpretador:
                 texto_original,
                 texto_normalizado,
             ),
+            "descricao_tarefa": self._extrair_descricao_tarefa(texto_original),
+            "id_tarefa": self._extrair_id_tarefa(texto_normalizado),
         }
+
+    def _extrair_acao_agenda(self, texto: str) -> str | None:
+        """Extrai acoes basicas de agenda."""
+        if re.search(r"\bcriar\s+tarefa\s+.+", texto):
+            return "agenda_criar_tarefa"
+        if "listar tarefas" in texto or "minhas tarefas" in texto:
+            return "agenda_listar_tarefas"
+        if re.search(r"\bconcluir\s+tarefa\b", texto):
+            return "agenda_concluir_tarefa"
+        if re.search(r"\bremover\s+tarefa\b", texto):
+            return "agenda_remover_tarefa"
+        return None
+
+    def _extrair_descricao_tarefa(self, texto: str) -> str | None:
+        """Extrai descricao de comandos de tarefa."""
+        descricao = self._extrair_por_regex(
+            texto,
+            [
+                r"\bcriar\s+tarefa\s+(.+)$",
+                r"\bconcluir\s+tarefa\s+(.+)$",
+                r"\bremover\s+tarefa\s+(.+)$",
+            ],
+        )
+        if not descricao:
+            return None
+
+        descricao_limpa = self._limpar_valor(descricao)
+        if descricao_limpa.isdigit():
+            return None
+        return descricao_limpa
+
+    def _extrair_id_tarefa(self, texto: str) -> int | None:
+        """Extrai id numerico de comandos de tarefa."""
+        encontrado = re.search(r"\btarefa\s+#?(\d+)\b", texto)
+        if not encontrado:
+            return None
+        return int(encontrado.group(1))
 
     def _extrair_acao_arquivos(self, texto: str) -> str | None:
         """Extrai acoes seguras com arquivos e pastas."""
