@@ -17,12 +17,14 @@ class Cooper:
         response_builder: ResponseBuilder,
         contexto_agent: Any | None = None,
         historico_agent: Any | None = None,
+        aprendizados_agent: Any | None = None,
     ) -> None:
         self.interpretador = interpretador
         self.router = router
         self.response_builder = response_builder
         self.contexto_agent = contexto_agent
         self.historico_agent = historico_agent
+        self.aprendizados_agent = aprendizados_agent
 
     def responder(self, texto: str) -> str:
         """Processa texto de entrada e devolve resposta formatada."""
@@ -31,6 +33,7 @@ class Cooper:
         resposta = self.response_builder.formatar(resultado)
         self._registrar_contexto(analise, resultado, resposta)
         self._registrar_historico(analise, resultado, resposta)
+        self._registrar_aprendizados(analise, resultado, resposta)
         return resposta
 
     def _registrar_contexto(
@@ -60,6 +63,22 @@ class Cooper:
             return
 
         self.historico_agent.registrar_interacao(
+            analise=analise,
+            resultado=resultado,
+            resposta=resposta,
+        )
+
+    def _registrar_aprendizados(
+        self,
+        analise: dict[str, Any],
+        resultado: dict[str, Any],
+        resposta: str,
+    ) -> None:
+        """Orquestra o registro de aprendizados de uso."""
+        if self.aprendizados_agent is None:
+            return
+
+        self.aprendizados_agent.registrar_interacao(
             analise=analise,
             resultado=resultado,
             resposta=resposta,

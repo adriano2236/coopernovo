@@ -39,6 +39,32 @@ class Interpretador:
         if any(termo in texto for termo in termos_historico):
             return "historico_consultar"
 
+        if self._extrair_acao_sistema(texto):
+            return "sistema_executar"
+
+        termos_aprendizados = {
+            "aprendizados",
+            "mostrar aprendizados",
+            "o que voce aprendeu",
+            "padroes aprendidos",
+        }
+        if any(termo in texto for termo in termos_aprendizados):
+            return "aprendizados_consultar"
+
+        if self._extrair_objetivo_estrategico(texto):
+            return "estrategia_registrar"
+
+        termos_estrategia = {
+            "estrategia",
+            "objetivos",
+            "objetivos estrategicos",
+            "metas",
+            "minhas metas",
+            "meus objetivos",
+        }
+        if any(termo in texto for termo in termos_estrategia):
+            return "estrategia_consultar"
+
         if self._extrair_consulta_memoria_operacional(texto):
             return "memoria_operacional_consultar"
 
@@ -76,7 +102,71 @@ class Interpretador:
             "categoria_memoria_operacional": (
                 self._extrair_categoria_memoria(texto_normalizado)
             ),
+            "objetivo_estrategico": self._extrair_objetivo_estrategico(
+                texto_original
+            ),
+            "acao_sistema": self._extrair_acao_sistema(texto_normalizado),
         }
+
+    def _extrair_acao_sistema(self, texto: str) -> str | None:
+        """Extrai acoes simples do sistema operacional."""
+        if not re.search(r"\b(?:abrir|abre|iniciar|executar)\b", texto):
+            return None
+
+        if "bloco de notas" in texto or "notepad" in texto:
+            return "abrir_bloco_de_notas"
+        if "calculadora" in texto or "calc" in texto:
+            return "abrir_calculadora"
+        if "vs code" in texto or "vscode" in texto or "visual studio code" in texto:
+            return "abrir_vscode"
+        if (
+            "explorador" in texto
+            or "explorer" in texto
+            or "explorador de arquivos" in texto
+        ):
+            return "abrir_explorador"
+
+        return None
+
+    def _extrair_objetivo_estrategico(self, texto: str) -> dict[str, str] | None:
+        """Extrai objetivo, projeto ou meta estrategica."""
+        objetivo = self._extrair_por_regex(
+            texto,
+            [
+                r"\bobjetivo\s*:\s*(.+)$",
+                r"\bobjetivo\s+(?:e|eh|\u00e9)\s+(.+)$",
+                r"\bminha\s+meta\s+(?:e|eh|\u00e9)\s+(.+)$",
+                r"\bmeta\s*:\s*(.+)$",
+            ],
+        )
+        if not objetivo:
+            return None
+
+        valor = self._limpar_valor(objetivo)
+        return {
+            "objetivo": valor,
+            "descricao": valor,
+            "prioridade": self._extrair_prioridade(texto),
+            "status": self._extrair_status(texto),
+        }
+
+    def _extrair_prioridade(self, texto: str) -> str:
+        """Extrai prioridade simples do texto."""
+        texto_normalizado = self._normalizar(texto)
+        if "prioridade alta" in texto_normalizado or "urgente" in texto_normalizado:
+            return "alta"
+        if "prioridade baixa" in texto_normalizado:
+            return "baixa"
+        return "media"
+
+    def _extrair_status(self, texto: str) -> str:
+        """Extrai status simples do texto."""
+        texto_normalizado = self._normalizar(texto)
+        if "concluido" in texto_normalizado or "finalizado" in texto_normalizado:
+            return "concluido"
+        if "pausado" in texto_normalizado:
+            return "pausado"
+        return "ativo"
 
     def _extrair_memoria_operacional(
         self,
