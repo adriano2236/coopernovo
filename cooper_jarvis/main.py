@@ -2,6 +2,7 @@
 
 from agents.assistente_agent import AssistenteAgent
 from agents.aprendizados_agent import AprendizadosAgent
+from agents.arquivos_agent import ArquivosAgent
 from agents.contexto_agent import ContextoAgent
 from agents.estrategia_agent import EstrategiaAgent
 from agents.historico_agent import HistoricoAgent
@@ -12,6 +13,7 @@ from core.response_builder import ResponseBuilder
 from core.router import Router
 from nlp.interpretador import Interpretador
 from repositories.aprendizados_repository import AprendizadosRepository
+from repositories.arquivos_repository import ArquivosRepository
 from repositories.contexto_repository import ContextoRepository
 from repositories.estrategia_repository import EstrategiaRepository
 from repositories.historico_repository import HistoricoRepository
@@ -38,6 +40,8 @@ def criar_cooper() -> Cooper:
     estrategia_agent = EstrategiaAgent(repository=estrategia_repository)
     sistema_repository = SistemaRepository()
     sistema_agent = SistemaAgent(repository=sistema_repository)
+    arquivos_repository = ArquivosRepository()
+    arquivos_agent = ArquivosAgent(repository=arquivos_repository)
 
     return Cooper(
         interpretador=Interpretador(),
@@ -48,6 +52,7 @@ def criar_cooper() -> Cooper:
                 aprendizados_agent,
                 estrategia_agent,
                 memoria_operacional_agent,
+                arquivos_agent,
                 sistema_agent,
                 AssistenteAgent(),
             ]
@@ -75,6 +80,10 @@ def exibir_ajuda() -> None:
     print("  meus objetivos")
     print("  abrir calculadora")
     print("  abrir VS Code")
+    print("  abrir pasta Cooper")
+    print("  listar arquivos da pasta Cooper")
+    print("  criar pasta testes jarvis")
+    print("  criar anotacao comprar pilhas")
     print("  mostrar historico")
     print("  qual foi o ultimo comando?")
 

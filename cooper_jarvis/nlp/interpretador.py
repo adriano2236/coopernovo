@@ -39,6 +39,9 @@ class Interpretador:
         if any(termo in texto for termo in termos_historico):
             return "historico_consultar"
 
+        if self._extrair_acao_arquivos(texto):
+            return "arquivos_executar"
+
         if self._extrair_acao_sistema(texto):
             return "sistema_executar"
 
@@ -106,7 +109,47 @@ class Interpretador:
                 texto_original
             ),
             "acao_sistema": self._extrair_acao_sistema(texto_normalizado),
+            "acao_arquivos": self._extrair_acao_arquivos(texto_normalizado),
+            "dados_arquivos": self._extrair_dados_arquivos(
+                texto_original,
+                texto_normalizado,
+            ),
         }
+
+    def _extrair_acao_arquivos(self, texto: str) -> str | None:
+        """Extrai acoes seguras com arquivos e pastas."""
+        if "abrir pasta cooper" in texto:
+            return "abrir_pasta_cooper"
+        if "listar arquivos da pasta cooper" in texto or "listar pasta cooper" in texto:
+            return "listar_pasta_cooper"
+        if re.search(r"\bcriar\s+pasta\s+.+", texto):
+            return "criar_pasta"
+        if re.search(r"\bcriar\s+anotacao\s+.+", texto):
+            return "criar_anotacao"
+        return None
+
+    def _extrair_dados_arquivos(
+        self,
+        texto_original: str,
+        texto_normalizado: str,
+    ) -> dict[str, str]:
+        """Extrai dados para acoes de arquivos sem executar nada."""
+        acao = self._extrair_acao_arquivos(texto_normalizado)
+        if acao == "criar_pasta":
+            nome = self._extrair_por_regex(
+                texto_original,
+                [r"\bcriar\s+pasta\s+(.+)$"],
+            )
+            return {"nome": self._limpar_valor(nome or "")}
+
+        if acao == "criar_anotacao":
+            texto = self._extrair_por_regex(
+                texto_original,
+                [r"\bcriar\s+anota(?:cao|\u00e7\u00e3o)\s+(.+)$"],
+            )
+            return {"texto": self._limpar_valor(texto or "")}
+
+        return {}
 
     def _extrair_acao_sistema(self, texto: str) -> str | None:
         """Extrai acoes simples do sistema operacional."""
